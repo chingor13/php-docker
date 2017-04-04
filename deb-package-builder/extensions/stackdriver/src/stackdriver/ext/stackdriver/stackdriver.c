@@ -73,9 +73,6 @@ PHP_MINIT_FUNCTION(stackdriver)
     // STACKDRIVER_G(_zend_execute_internal) = zend_execute_internal;
     // zend_execute_internal = stackdriver_trace_execute_internal;
 
-    STACKDRIVER_G(spans) = emalloc(64 * sizeof(struct stackdriver_trace_span_t *));
-    STACKDRIVER_G(span_count) = 0;
-
 
     // php_printf("... done MINIT\n");
     return SUCCESS;
@@ -86,27 +83,13 @@ PHP_MINIT_FUNCTION(stackdriver)
  */
 PHP_MSHUTDOWN_FUNCTION(stackdriver)
 {
-
     return SUCCESS;
 }
 /* }}} */
 
 PHP_RINIT_FUNCTION(stackdriver)
 {
-    // php_printf("stackdriver RINIT...\n");
-
-    ALLOC_HASHTABLE(STACKDRIVER_G(traced_functions));
-    zend_hash_init(STACKDRIVER_G(traced_functions), 16, NULL, ZVAL_PTR_DTOR, 0);
-
-    stackdriver_trace_setup_automatic_tracing();
-
-    if (STACKDRIVER_G(spans)) {
-        efree(STACKDRIVER_G(spans));
-    }
-    STACKDRIVER_G(spans) = emalloc(64 * sizeof(struct stackdriver_trace_span_t *));
-    STACKDRIVER_G(span_count) = 0;
-
-    // php_printf("... done RINIT\n");
+    stackdriver_trace_init();
     return SUCCESS;
 }
 
@@ -114,7 +97,7 @@ PHP_RINIT_FUNCTION(stackdriver)
  */
 PHP_RSHUTDOWN_FUNCTION(stackdriver)
 {
-
+    stackdriver_trace_teardown();
     return SUCCESS;
 }
 /* }}} */

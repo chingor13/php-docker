@@ -193,16 +193,61 @@ PHP_FUNCTION(stackdriver_trace_list)
 
 void stackdriver_trace_setup_automatic_tracing()
 {
-    stackdriver_trace_register("Illuminate\\Foundation\\Application::boot");
-    stackdriver_trace_register("Illuminate\\Foundation\\Application::dispatch");
-    stackdriver_trace_register("Illuminate\\Session\\Middleware\\StartSession::startSession");
-    stackdriver_trace_register("Illuminate\\Session\\Middleware\\StartSession::collectGarbage");
-    stackdriver_trace_register("Illuminate\\Database\\Eloquent\\Builder::getModels");
-    stackdriver_trace_register("Illuminate\\Database\\Eloquent\\Model::performInsert");
-    stackdriver_trace_register("Illuminate\\Database\\Eloquent\\Model::performUpdate");
-    stackdriver_trace_register("Illuminate\\Database\\Eloquent\\Model::delete");
-    stackdriver_trace_register("Illuminate\\Database\\Eloquent\\Model::destroy");
-    stackdriver_trace_register("Illuminate\\Events\\Dispatcher::fire");
-    stackdriver_trace_register("Illuminate\\View\\Engines\\CompilerEngine::get");
-    stackdriver_trace_register("Illuminate\\Routing\\Controller::callAction");
+  // stackdriver_trace_register("Illuminate\\Foundation\\Application::boot");
+  // stackdriver_trace_register("Illuminate\\Foundation\\Application::dispatch");
+  // stackdriver_trace_register("Illuminate\\Session\\Middleware\\StartSession::startSession");
+  // stackdriver_trace_register("Illuminate\\Session\\Middleware\\StartSession::collectGarbage");
+  stackdriver_trace_register("Illuminate\\Database\\Eloquent\\Builder::getModels");
+  stackdriver_trace_register("Illuminate\\Database\\Eloquent\\Model::performInsert");
+  stackdriver_trace_register("Illuminate\\Database\\Eloquent\\Model::performUpdate");
+  stackdriver_trace_register("Illuminate\\Database\\Eloquent\\Model::delete");
+  stackdriver_trace_register("Illuminate\\Database\\Eloquent\\Model::destroy");
+  // stackdriver_trace_register("Illuminate\\Events\\Dispatcher::fire");
+  // stackdriver_trace_register("Illuminate\\View\\Engines\\CompilerEngine::get");
+  // stackdriver_trace_register("Illuminate\\Routing\\Controller::callAction");
+  stackdriver_trace_register("PDO::exec");
+  stackdriver_trace_register("PDO::query");
+
+  stackdriver_trace_register("mysql_query");
+  stackdriver_trace_register("mysqli_query");
+  stackdriver_trace_register("mysqli::query");
+  stackdriver_trace_register("mysqli::prepare");
+  stackdriver_trace_register("mysqli_prepare");
+
+  stackdriver_trace_register("PDO::commit");
+  stackdriver_trace_register("mysqli::commit");
+  stackdriver_trace_register("mysqli_commit");
+
+  stackdriver_trace_register("mysql_connect");
+  stackdriver_trace_register("mysqli_connect");
+  stackdriver_trace_register("mysqli::__construct");
+  stackdriver_trace_register("mysqli::mysqli");
+
+  stackdriver_trace_register("PDO::__construct");
+
+  stackdriver_trace_register("PDOStatement::execute");
+
+  stackdriver_trace_register("mysqli_stmt_execute");
+  stackdriver_trace_register("mysqli_stmt::execute");
+
+  stackdriver_trace_register("pg_query");
+  stackdriver_trace_register("pg_query_params");
+
+  stackdriver_trace_register("pg_execute");
+}
+
+void stackdriver_trace_init()
+{
+    ALLOC_HASHTABLE(STACKDRIVER_G(traced_functions));
+    zend_hash_init(STACKDRIVER_G(traced_functions), 16, NULL, ZVAL_PTR_DTOR, 0);
+
+    stackdriver_trace_setup_automatic_tracing();
+
+    STACKDRIVER_G(spans) = emalloc(64 * sizeof(struct stackdriver_trace_span_t *));
+    STACKDRIVER_G(span_count) = 0;
+}
+
+void stackdriver_trace_teardown()
+{
+    efree(STACKDRIVER_G(spans));
 }

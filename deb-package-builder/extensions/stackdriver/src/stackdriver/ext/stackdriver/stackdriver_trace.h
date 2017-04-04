@@ -22,6 +22,7 @@ typedef struct stackdriver_trace_span_t {
     struct stackdriver_trace_span_t *parent;
 } stackdriver_trace_span_t;
 
-void stackdriver_trace_setup_automatic_tracing();
+void stackdriver_trace_init();
+void stackdriver_trace_teardown();
 
 #endif /* PHP_STACKDRIVER_TRACE_H */
