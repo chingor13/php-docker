@@ -14,12 +14,18 @@ void stackdriver_trace_execute_internal(zend_execute_data *execute_data,
                                                       struct _zend_fcall_info *fci, int ret TSRMLS_DC);
 void stackdriver_trace_execute_ex (zend_execute_data *execute_data TSRMLS_DC);
 
+typedef struct stackdriver_trace_span_label_t {
+    char *key;
+    char *value;
+} stackdriver_trace_span_label_t;
+
 // TraceSpan struct
 typedef struct stackdriver_trace_span_t {
     char *name;
     struct timeval start;
     struct timeval stop;
     struct stackdriver_trace_span_t *parent;
+    HashTable *labels;
 } stackdriver_trace_span_t;
 
 void stackdriver_trace_init();

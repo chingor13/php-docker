@@ -1,6 +1,25 @@
 #include "php_stackdriver.h"
 #include "stackdriver_trace.h"
 
+void stackdriver_trace_add_label(struct stackdriver_trace_span_t *span, zend_string *key, zend_string *value)
+{
+    zval data;
+    ZVAL_STR(&data, value);
+    if (span->labels == NULL) {
+        span->labels = emalloc(sizeof(HashTable));
+        zend_hash_init(span->labels, 4, NULL, ZVAL_PTR_DTOR, 0);
+    }
+
+    zend_hash_update(span->labels, key, &data);
+}
+
+void stackdriver_trace_add_label_str(struct stackdriver_trace_span_t *span, char *key, zend_string *value)
+{
+    zend_string *zend_key = zend_string_init(key, strlen(key), 0);
+    stackdriver_trace_add_label(span, zend_key, value);
+    zend_string_release(zend_key);
+}
+
 int stackdriver_trace_begin(zend_string *function_name, zval *handler)
 {
     struct stackdriver_trace_span_t *span = emalloc(sizeof(stackdriver_trace_span_t));
@@ -13,9 +32,11 @@ int stackdriver_trace_begin(zend_string *function_name, zval *handler)
     STACKDRIVER_G(current_span) = span;
     STACKDRIVER_G(spans)[STACKDRIVER_G(span_count)++] = span;
 
-    // php_printf("BEGIN: %s\n", ZSTR_VAL(function_name));
+    stackdriver_trace_add_label_str(span, "foo", function_name);
+
     return SUCCESS;
 }
+
 
 int stackdriver_trace_finish()
 {
@@ -29,7 +50,6 @@ int stackdriver_trace_finish()
 
     STACKDRIVER_G(current_span) = span->parent;
 
-    // php_printf("FINISH\n");
     return SUCCESS;
 }
 
@@ -174,6 +194,9 @@ PHP_FUNCTION(stackdriver_trace_list)
     int i;
     stackdriver_trace_span_t *trace_span;
     int num_spans = STACKDRIVER_G(span_count);
+    ulong idx;
+    zend_string *k;
+    zval *v;
 
     array_init(return_value);
 
@@ -187,53 +210,63 @@ PHP_FUNCTION(stackdriver_trace_list)
         add_assoc_double(&span, "start", stackdriver_timeval_to_timestamp(&trace_span->start));
         add_assoc_double(&span, "stop", stackdriver_timeval_to_timestamp(&trace_span->stop));
 
+        if (trace_span->labels) {
+            zval labels;
+            array_init(&labels);
+
+            ZEND_HASH_FOREACH_KEY_VAL(trace_span->labels, idx, k, v) {
+                add_assoc_zval(&labels, ZSTR_VAL(k), v);
+            } ZEND_HASH_FOREACH_END();
+            add_assoc_zval(&span, "labels", &labels);
+        }
+
         add_next_index_zval(return_value, &span);
     }
 }
 
 void stackdriver_trace_setup_automatic_tracing()
 {
-  // stackdriver_trace_register("Illuminate\\Foundation\\Application::boot");
-  // stackdriver_trace_register("Illuminate\\Foundation\\Application::dispatch");
-  // stackdriver_trace_register("Illuminate\\Session\\Middleware\\StartSession::startSession");
-  // stackdriver_trace_register("Illuminate\\Session\\Middleware\\StartSession::collectGarbage");
-  stackdriver_trace_register("Illuminate\\Database\\Eloquent\\Builder::getModels");
-  stackdriver_trace_register("Illuminate\\Database\\Eloquent\\Model::performInsert");
-  stackdriver_trace_register("Illuminate\\Database\\Eloquent\\Model::performUpdate");
-  stackdriver_trace_register("Illuminate\\Database\\Eloquent\\Model::delete");
-  stackdriver_trace_register("Illuminate\\Database\\Eloquent\\Model::destroy");
-  // stackdriver_trace_register("Illuminate\\Events\\Dispatcher::fire");
-  // stackdriver_trace_register("Illuminate\\View\\Engines\\CompilerEngine::get");
-  // stackdriver_trace_register("Illuminate\\Routing\\Controller::callAction");
-  stackdriver_trace_register("PDO::exec");
-  stackdriver_trace_register("PDO::query");
+    // stackdriver_trace_register("Illuminate\\Foundation\\Application::boot");
+    // stackdriver_trace_register("Illuminate\\Foundation\\Application::dispatch");
+    // stackdriver_trace_register("Illuminate\\Session\\Middleware\\StartSession::startSession");
+    // stackdriver_trace_register("Illuminate\\Session\\Middleware\\StartSession::collectGarbage");
+    stackdriver_trace_register("Illuminate\\Database\\Eloquent\\Builder::getModels");
+    stackdriver_trace_register("Illuminate\\Database\\Eloquent\\Model::performInsert");
+    stackdriver_trace_register("Illuminate\\Database\\Eloquent\\Model::performUpdate");
+    stackdriver_trace_register("Illuminate\\Database\\Eloquent\\Model::delete");
+    stackdriver_trace_register("Illuminate\\Database\\Eloquent\\Model::destroy");
+    // stackdriver_trace_register("Illuminate\\Events\\Dispatcher::fire");
+    // stackdriver_trace_register("Illuminate\\View\\Engines\\CompilerEngine::get");
+    // stackdriver_trace_register("Illuminate\\Routing\\Controller::callAction");
+    stackdriver_trace_register("PDO::exec");
+    stackdriver_trace_register("PDO::query");
 
-  stackdriver_trace_register("mysql_query");
-  stackdriver_trace_register("mysqli_query");
-  stackdriver_trace_register("mysqli::query");
-  stackdriver_trace_register("mysqli::prepare");
-  stackdriver_trace_register("mysqli_prepare");
+    stackdriver_trace_register("mysql_query");
+    stackdriver_trace_register("mysqli_query");
+    stackdriver_trace_register("mysqli::query");
+    stackdriver_trace_register("mysqli::prepare");
+    stackdriver_trace_register("mysqli_prepare");
 
-  stackdriver_trace_register("PDO::commit");
-  stackdriver_trace_register("mysqli::commit");
-  stackdriver_trace_register("mysqli_commit");
+    stackdriver_trace_register("PDO::commit");
+    stackdriver_trace_register("mysqli::commit");
+    stackdriver_trace_register("mysqli_commit");
 
-  stackdriver_trace_register("mysql_connect");
-  stackdriver_trace_register("mysqli_connect");
-  stackdriver_trace_register("mysqli::__construct");
-  stackdriver_trace_register("mysqli::mysqli");
+    stackdriver_trace_register("mysql_connect");
+    stackdriver_trace_register("mysqli_connect");
+    stackdriver_trace_register("mysqli::__construct");
+    stackdriver_trace_register("mysqli::mysqli");
 
-  stackdriver_trace_register("PDO::__construct");
+    stackdriver_trace_register("PDO::__construct");
 
-  stackdriver_trace_register("PDOStatement::execute");
+    stackdriver_trace_register("PDOStatement::execute");
 
-  stackdriver_trace_register("mysqli_stmt_execute");
-  stackdriver_trace_register("mysqli_stmt::execute");
+    stackdriver_trace_register("mysqli_stmt_execute");
+    stackdriver_trace_register("mysqli_stmt::execute");
 
-  stackdriver_trace_register("pg_query");
-  stackdriver_trace_register("pg_query_params");
+    stackdriver_trace_register("pg_query");
+    stackdriver_trace_register("pg_query_params");
 
-  stackdriver_trace_register("pg_execute");
+    stackdriver_trace_register("pg_execute");
 }
 
 void stackdriver_trace_init()
