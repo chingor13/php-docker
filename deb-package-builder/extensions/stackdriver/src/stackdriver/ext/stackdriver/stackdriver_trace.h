@@ -22,6 +22,7 @@ typedef struct stackdriver_trace_span_label_t {
 // TraceSpan struct
 typedef struct stackdriver_trace_span_t {
     char *name;
+    uint32_t span_id;
     struct timeval start;
     struct timeval stop;
     struct stackdriver_trace_span_t *parent;

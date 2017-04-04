@@ -1,16 +1,21 @@
 #include "php_stackdriver.h"
 #include "stackdriver_trace.h"
 
-void stackdriver_trace_add_label(struct stackdriver_trace_span_t *span, zend_string *key, zend_string *value)
+void stackdriver_trace_add_label_zval(struct stackdriver_trace_span_t *span, zend_string *key, zval *value)
 {
-    zval data;
-    ZVAL_STR(&data, value);
     if (span->labels == NULL) {
         span->labels = emalloc(sizeof(HashTable));
         zend_hash_init(span->labels, 4, NULL, ZVAL_PTR_DTOR, 0);
     }
 
-    zend_hash_update(span->labels, key, &data);
+    zend_hash_update(span->labels, key, value);
+}
+
+void stackdriver_trace_add_label(struct stackdriver_trace_span_t *span, zend_string *key, zend_string *value)
+{
+    zval data;
+    ZVAL_STR(&data, value);
+    stackdriver_trace_add_label_zval(span, key, &data);
 }
 
 void stackdriver_trace_add_label_str(struct stackdriver_trace_span_t *span, char *key, zend_string *value)
@@ -25,6 +30,7 @@ int stackdriver_trace_begin(zend_string *function_name, zval *handler)
     struct stackdriver_trace_span_t *span = emalloc(sizeof(stackdriver_trace_span_t));
     gettimeofday(&span->start, NULL);
     span->name = ZSTR_VAL(function_name);
+    span->span_id = php_mt_rand();
 
     if (STACKDRIVER_G(current_span)) {
         span->parent = STACKDRIVER_G(current_span);
@@ -32,7 +38,7 @@ int stackdriver_trace_begin(zend_string *function_name, zval *handler)
     STACKDRIVER_G(current_span) = span;
     STACKDRIVER_G(spans)[STACKDRIVER_G(span_count)++] = span;
 
-    stackdriver_trace_add_label_str(span, "foo", function_name);
+    stackdriver_trace_add_label_str(span, "function_name", function_name);
 
     return SUCCESS;
 }
@@ -206,6 +212,10 @@ PHP_FUNCTION(stackdriver_trace_list)
 
         trace_span = STACKDRIVER_G(spans)[i];
 
+        add_assoc_long(&span, "id", trace_span->span_id);
+        if (trace_span->parent) {
+            add_assoc_long(&span, "parent_id", trace_span->parent->span_id);
+        }
         add_assoc_string(&span, "name", trace_span->name);
         add_assoc_double(&span, "start", stackdriver_timeval_to_timestamp(&trace_span->start));
         add_assoc_double(&span, "stop", stackdriver_timeval_to_timestamp(&trace_span->stop));
@@ -276,6 +286,7 @@ void stackdriver_trace_init()
 
     stackdriver_trace_setup_automatic_tracing();
 
+    STACKDRIVER_G(current_span) = NULL;
     STACKDRIVER_G(spans) = emalloc(64 * sizeof(struct stackdriver_trace_span_t *));
     STACKDRIVER_G(span_count) = 0;
 }
