@@ -329,5 +329,14 @@ void stackdriver_trace_init()
 
 void stackdriver_trace_teardown()
 {
+    int i;
+    struct stackdriver_trace_span_t *span;
+    for (i = 0; i < STACKDRIVER_G(span_count); i++) {
+        span = STACKDRIVER_G(spans)[i];
+        if (span->labels) {
+            efree(span->labels);
+        }
+        efree(span);
+    }
     efree(STACKDRIVER_G(spans));
 }
