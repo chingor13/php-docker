@@ -26,6 +26,8 @@ typedef struct stackdriver_trace_span_t {
     struct timeval start;
     struct timeval stop;
     struct stackdriver_trace_span_t *parent;
+
+    // zend_string* => zend_string*
     HashTable *labels;
 } stackdriver_trace_span_t;
 

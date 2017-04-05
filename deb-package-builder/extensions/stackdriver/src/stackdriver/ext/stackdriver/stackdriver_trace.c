@@ -1,37 +1,33 @@
 #include "php_stackdriver.h"
 #include "stackdriver_trace.h"
 
-void stackdriver_trace_add_label_zval(struct stackdriver_trace_span_t *span, zend_string *key, zval *value)
+void stackdriver_trace_add_labels(struct stackdriver_trace_span_t *span, HashTable *ht)
 {
+    ulong idx;
+    zend_string *k, *copy;
+    zval *v;
+
+    // instantiate labels if not already created
     if (span->labels == NULL) {
         span->labels = emalloc(sizeof(HashTable));
         zend_hash_init(span->labels, 4, NULL, ZVAL_PTR_DTOR, 0);
     }
 
-    zend_hash_update(span->labels, key, value);
-}
-
-void stackdriver_trace_add_label(struct stackdriver_trace_span_t *span, zend_string *key, zend_string *value)
-{
-    zval data;
-    ZVAL_STR(&data, value);
-    stackdriver_trace_add_label_zval(span, key, &data);
-}
-
-void stackdriver_trace_add_label_str(struct stackdriver_trace_span_t *span, char *key, zend_string *value)
-{
-    zend_string *zend_key = zend_string_init(key, strlen(key), 0);
-    stackdriver_trace_add_label(span, zend_key, value);
-    zend_string_release(zend_key);
-}
-
-void stackdriver_trace_add_labels(struct stackdriver_trace_span_t *span, HashTable *ht) {
-    ulong idx;
-    zend_string *k, *copy;
-    zval *v;
     ZEND_HASH_FOREACH_KEY_VAL(ht, idx, k, v) {
         copy = zend_string_init(Z_STRVAL_P(v), strlen(Z_STRVAL_P(v)), 0);
-        stackdriver_trace_add_label(span, k, copy);
+        zend_hash_update_ptr(span->labels, k, copy);
+    } ZEND_HASH_FOREACH_END();
+}
+
+void stackdriver_labels_to_zval_array(HashTable *ht, zval *return_value)
+{
+    ulong idx;
+    zend_string *k, *v;
+
+    array_init(return_value);
+
+    ZEND_HASH_FOREACH_KEY_PTR(ht, idx, k, v) {
+        add_assoc_string(return_value, ZSTR_VAL(k), ZSTR_VAL(v));
     } ZEND_HASH_FOREACH_END();
 }
 
@@ -260,11 +256,7 @@ PHP_FUNCTION(stackdriver_trace_list)
 
         if (trace_span->labels) {
             zval labels;
-            array_init(&labels);
-
-            ZEND_HASH_FOREACH_KEY_VAL(trace_span->labels, idx, k, v) {
-                add_assoc_zval(&labels, ZSTR_VAL(k), v);
-            } ZEND_HASH_FOREACH_END();
+            stackdriver_labels_to_zval_array(trace_span->labels, &labels);
             add_assoc_zval(&span, "labels", &labels);
         }
 
