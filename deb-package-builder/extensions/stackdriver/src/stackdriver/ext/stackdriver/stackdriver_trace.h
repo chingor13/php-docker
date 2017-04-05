@@ -23,8 +23,8 @@ typedef struct stackdriver_trace_span_label_t {
 typedef struct stackdriver_trace_span_t {
     char *name;
     uint32_t span_id;
-    struct timeval start;
-    struct timeval stop;
+    double start;
+    double stop;
     struct stackdriver_trace_span_t *parent;
 
     // zend_string* => zend_string*

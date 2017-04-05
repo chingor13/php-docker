@@ -31,6 +31,14 @@ void stackdriver_labels_to_zval_array(HashTable *ht, zval *return_value)
     } ZEND_HASH_FOREACH_END();
 }
 
+double stackdriver_trace_now()
+{
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+
+    return (double) (tv.tv_sec + tv.tv_usec / 1000000.00);
+}
+
 int stackdriver_trace_begin(zend_string *function_name, zval *span_options)
 {
     HashTable *ht;
@@ -38,7 +46,8 @@ int stackdriver_trace_begin(zend_string *function_name, zval *span_options)
     zend_string *k;
     zval *v;
     struct stackdriver_trace_span_t *span = emalloc(sizeof(stackdriver_trace_span_t));
-    gettimeofday(&span->start, NULL);
+
+    span->start = stackdriver_trace_now();
     span->name = ZSTR_VAL(function_name);
     span->span_id = php_mt_rand();
     span->labels = NULL;
@@ -49,7 +58,7 @@ int stackdriver_trace_begin(zend_string *function_name, zval *span_options)
             if (strcmp(ZSTR_VAL(k), "labels") == 0) {
                 stackdriver_trace_add_labels(span, Z_ARR_P(v));
             } else if (ZSTR_VAL(k) == "startTime") {
-
+                span->start = Z_DVAL_P(v);
             }
         } ZEND_HASH_FOREACH_END();
     }
@@ -73,7 +82,8 @@ int stackdriver_trace_finish()
         return FAILURE;
     }
 
-    gettimeofday(&(span->stop), NULL);
+    // set current time for now
+    span->stop = stackdriver_trace_now();
 
     STACKDRIVER_G(current_span) = span->parent;
 
@@ -223,10 +233,6 @@ PHP_FUNCTION(stackdriver_trace_method)
     RETURN_FALSE;
 }
 
-double stackdriver_timeval_to_timestamp(struct timeval *tv) {
-    return (double) (tv->tv_sec + tv->tv_usec / 1000000.00);
-}
-
 /* {{{ proto int stackdriver_trace_method()
 Fetch the Object Handle ID from an instance */
 PHP_FUNCTION(stackdriver_trace_list)
@@ -251,8 +257,8 @@ PHP_FUNCTION(stackdriver_trace_list)
             add_assoc_long(&span, "parentSpanId", trace_span->parent->span_id);
         }
         add_assoc_string(&span, "name", trace_span->name);
-        add_assoc_double(&span, "startTime", stackdriver_timeval_to_timestamp(&trace_span->start));
-        add_assoc_double(&span, "endTime", stackdriver_timeval_to_timestamp(&trace_span->stop));
+        add_assoc_double(&span, "startTime", trace_span->start);
+        add_assoc_double(&span, "endTime", trace_span->stop);
 
         if (trace_span->labels) {
             zval labels;
