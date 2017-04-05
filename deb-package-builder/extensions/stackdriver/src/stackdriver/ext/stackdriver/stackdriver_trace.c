@@ -25,31 +25,56 @@ void stackdriver_trace_add_label_str(struct stackdriver_trace_span_t *span, char
     zend_string_release(zend_key);
 }
 
-int stackdriver_trace_begin(zend_string *function_name, zval *handler)
+void stackdriver_trace_add_labels(struct stackdriver_trace_span_t *span, HashTable *ht) {
+    ulong idx;
+    zend_string *k, *copy;
+    zval *v;
+    ZEND_HASH_FOREACH_KEY_VAL(ht, idx, k, v) {
+        copy = zend_string_init(Z_STRVAL_P(v), strlen(Z_STRVAL_P(v)), 0);
+        stackdriver_trace_add_label(span, k, copy);
+    } ZEND_HASH_FOREACH_END();
+}
+
+int stackdriver_trace_begin(zend_string *function_name, zval *span_options)
 {
+    HashTable *ht;
+    ulong idx;
+    zend_string *k;
+    zval *v;
     struct stackdriver_trace_span_t *span = emalloc(sizeof(stackdriver_trace_span_t));
     gettimeofday(&span->start, NULL);
     span->name = ZSTR_VAL(function_name);
     span->span_id = php_mt_rand();
+    span->labels = NULL;
+
+    if (Z_TYPE_P(span_options) == IS_ARRAY) {
+        ht = Z_ARR_P(span_options);
+        ZEND_HASH_FOREACH_KEY_VAL(ht, idx, k, v) {
+            if (strcmp(ZSTR_VAL(k), "labels") == 0) {
+                stackdriver_trace_add_labels(span, Z_ARR_P(v));
+            } else if (ZSTR_VAL(k) == "startTime") {
+
+            }
+        } ZEND_HASH_FOREACH_END();
+    }
 
     if (STACKDRIVER_G(current_span)) {
         span->parent = STACKDRIVER_G(current_span);
+    } else {
+        span->parent = NULL;
     }
     STACKDRIVER_G(current_span) = span;
     STACKDRIVER_G(spans)[STACKDRIVER_G(span_count)++] = span;
 
-    stackdriver_trace_add_label_str(span, "function_name", function_name);
-
     return SUCCESS;
 }
-
 
 int stackdriver_trace_finish()
 {
     stackdriver_trace_span_t *span = STACKDRIVER_G(current_span);
 
     if (!span) {
-        return SUCCESS;
+        return FAILURE;
     }
 
     gettimeofday(&(span->stop), NULL);
@@ -57,29 +82,6 @@ int stackdriver_trace_finish()
     STACKDRIVER_G(current_span) = span->parent;
 
     return SUCCESS;
-}
-
-PHP_FUNCTION(stackdriver_trace_begin)
-{
-    zval *spanOptions;
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "a", &spanOptions) == FAILURE) {
-        RETURN_FALSE;
-    }
-    php_stackdriver_trace_begin(spanOptions);
-    RETURN_TRUE;
-}
-
-PHP_FUNCTION(stackdriver_trace_finish)
-{
-    php_stackdriver_trace_finish();
-    RETURN_TRUE;
-}
-
-void stackdriver_trace_execute_internal(zend_execute_data *execute_data,
-                                                      struct _zend_fcall_info *fci, int ret TSRMLS_DC) {
-    php_printf("before internal\n");
-    STACKDRIVER_G(_zend_execute_internal)(execute_data, fci, ret TSRMLS_CC);
-    php_printf("after internal\n");
 }
 
 zend_string *stackdriver_generate_class_name(zend_string *class_name, zend_string *function_name)
@@ -125,6 +127,39 @@ zend_string *stackdriver_trace_get_current_function_name()
     return result;
 }
 
+PHP_FUNCTION(stackdriver_trace_begin)
+{
+    zend_string *function_name;
+    zval *span_options;
+    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "Sa", &function_name, &span_options) == FAILURE) {
+        RETURN_FALSE;
+    }
+
+    stackdriver_trace_begin(function_name, span_options);
+    // zend_string_release(function_name);
+    RETURN_TRUE;
+}
+
+PHP_FUNCTION(stackdriver_trace_finish)
+{
+    if (stackdriver_trace_finish()) {
+        RETURN_TRUE;
+    }
+    RETURN_FALSE;
+}
+
+void stackdriver_trace_execute_internal(zend_execute_data *execute_data,
+                                                      struct _zend_fcall_info *fci, int ret TSRMLS_DC) {
+    php_printf("before internal\n");
+    STACKDRIVER_G(_zend_execute_internal)(execute_data, fci, ret TSRMLS_CC);
+    php_printf("after internal\n");
+}
+
+/**
+ * This method replaces the internal zend_execute_ex method used to dispatch calls
+ * to user space code. The original zend_execute_ex method is moved to
+ * STACKDRIVER_G(_zend_execute_ex)
+ */
 void stackdriver_trace_execute_ex (zend_execute_data *execute_data TSRMLS_DC) {
     zend_string *function_name = stackdriver_trace_get_current_function_name();
     zval *trace_handler;
@@ -133,6 +168,9 @@ void stackdriver_trace_execute_ex (zend_execute_data *execute_data TSRMLS_DC) {
         trace_handler = zend_hash_find(STACKDRIVER_G(traced_functions), function_name);
 
         if (trace_handler != NULL) {
+            if (IS_ARRAY == Z_TYPE_INFO_P(trace_handler)) {
+                // this is an array to use as the labels
+            }
             stackdriver_trace_begin(function_name, trace_handler);
             STACKDRIVER_G(_zend_execute_ex)(execute_data TSRMLS_CC);
             stackdriver_trace_finish();
@@ -212,13 +250,13 @@ PHP_FUNCTION(stackdriver_trace_list)
 
         trace_span = STACKDRIVER_G(spans)[i];
 
-        add_assoc_long(&span, "id", trace_span->span_id);
+        add_assoc_long(&span, "spanId", trace_span->span_id);
         if (trace_span->parent) {
-            add_assoc_long(&span, "parent_id", trace_span->parent->span_id);
+            add_assoc_long(&span, "parentSpanId", trace_span->parent->span_id);
         }
         add_assoc_string(&span, "name", trace_span->name);
-        add_assoc_double(&span, "start", stackdriver_timeval_to_timestamp(&trace_span->start));
-        add_assoc_double(&span, "stop", stackdriver_timeval_to_timestamp(&trace_span->stop));
+        add_assoc_double(&span, "startTime", stackdriver_timeval_to_timestamp(&trace_span->start));
+        add_assoc_double(&span, "endTime", stackdriver_timeval_to_timestamp(&trace_span->stop));
 
         if (trace_span->labels) {
             zval labels;
@@ -248,35 +286,35 @@ void stackdriver_trace_setup_automatic_tracing()
     // stackdriver_trace_register("Illuminate\\Events\\Dispatcher::fire");
     // stackdriver_trace_register("Illuminate\\View\\Engines\\CompilerEngine::get");
     // stackdriver_trace_register("Illuminate\\Routing\\Controller::callAction");
-    stackdriver_trace_register("PDO::exec");
-    stackdriver_trace_register("PDO::query");
-
-    stackdriver_trace_register("mysql_query");
-    stackdriver_trace_register("mysqli_query");
-    stackdriver_trace_register("mysqli::query");
-    stackdriver_trace_register("mysqli::prepare");
-    stackdriver_trace_register("mysqli_prepare");
-
-    stackdriver_trace_register("PDO::commit");
-    stackdriver_trace_register("mysqli::commit");
-    stackdriver_trace_register("mysqli_commit");
-
-    stackdriver_trace_register("mysql_connect");
-    stackdriver_trace_register("mysqli_connect");
-    stackdriver_trace_register("mysqli::__construct");
-    stackdriver_trace_register("mysqli::mysqli");
-
-    stackdriver_trace_register("PDO::__construct");
-
-    stackdriver_trace_register("PDOStatement::execute");
-
-    stackdriver_trace_register("mysqli_stmt_execute");
-    stackdriver_trace_register("mysqli_stmt::execute");
-
-    stackdriver_trace_register("pg_query");
-    stackdriver_trace_register("pg_query_params");
-
-    stackdriver_trace_register("pg_execute");
+    // stackdriver_trace_register("PDO::exec");
+    // stackdriver_trace_register("PDO::query");
+    //
+    // stackdriver_trace_register("mysql_query");
+    // stackdriver_trace_register("mysqli_query");
+    // stackdriver_trace_register("mysqli::query");
+    // stackdriver_trace_register("mysqli::prepare");
+    // stackdriver_trace_register("mysqli_prepare");
+    //
+    // stackdriver_trace_register("PDO::commit");
+    // stackdriver_trace_register("mysqli::commit");
+    // stackdriver_trace_register("mysqli_commit");
+    //
+    // stackdriver_trace_register("mysql_connect");
+    // stackdriver_trace_register("mysqli_connect");
+    // stackdriver_trace_register("mysqli::__construct");
+    // stackdriver_trace_register("mysqli::mysqli");
+    //
+    // stackdriver_trace_register("PDO::__construct");
+    //
+    // stackdriver_trace_register("PDOStatement::execute");
+    //
+    // stackdriver_trace_register("mysqli_stmt_execute");
+    // stackdriver_trace_register("mysqli_stmt::execute");
+    //
+    // stackdriver_trace_register("pg_query");
+    // stackdriver_trace_register("pg_query_params");
+    //
+    // stackdriver_trace_register("pg_execute");
 }
 
 void stackdriver_trace_init()

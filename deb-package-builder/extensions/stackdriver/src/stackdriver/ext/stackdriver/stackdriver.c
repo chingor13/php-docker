@@ -73,7 +73,6 @@ PHP_MINIT_FUNCTION(stackdriver)
     // STACKDRIVER_G(_zend_execute_internal) = zend_execute_internal;
     // zend_execute_internal = stackdriver_trace_execute_internal;
 
-
     // php_printf("... done MINIT\n");
     return SUCCESS;
 }
