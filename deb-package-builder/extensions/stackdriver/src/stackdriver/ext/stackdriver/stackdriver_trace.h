@@ -16,7 +16,7 @@ void stackdriver_trace_execute_ex (zend_execute_data *execute_data TSRMLS_DC);
 
 // TraceSpan struct
 typedef struct stackdriver_trace_span_t {
-    char *name;
+    zend_string *name;
     uint32_t span_id;
     double start;
     double stop;

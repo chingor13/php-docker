@@ -77,7 +77,7 @@ struct stackdriver_trace_span_t *stackdriver_trace_begin(zend_string *function_n
     struct stackdriver_trace_span_t *span = emalloc(sizeof(stackdriver_trace_span_t));
 
     span->start = stackdriver_trace_now();
-    span->name = ZSTR_VAL(function_name);
+    span->name = zend_string_copy(function_name);
     span->span_id = php_mt_rand();
     span->labels = NULL;
 
@@ -263,7 +263,7 @@ PHP_FUNCTION(stackdriver_trace_list)
         if (trace_span->parent) {
             add_assoc_long(&span, "parentSpanId", trace_span->parent->span_id);
         }
-        add_assoc_string(&span, "name", trace_span->name);
+        add_assoc_string(&span, "name", ZSTR_VAL(trace_span->name));
         add_assoc_double(&span, "startTime", trace_span->start);
         add_assoc_double(&span, "endTime", trace_span->stop);
 
@@ -324,7 +324,7 @@ void stackdriver_trace_callback_eloquent_query(struct stackdriver_trace_span_t *
     zval *eloquent_model;
     zend_string *label;
 
-    span->name = "eloquent/get";
+    span->name = zend_string_init("eloquent/get", 12, 0);
 
     // obj is the Illuminate\Database\Eloquent\Builder
     zval *obj = ((data->This.value.obj) ? &(data->This) : NULL);
@@ -344,10 +344,10 @@ void stackdriver_trace_setup_automatic_tracing()
     // stackdriver_trace_register("Illuminate\\Session\\Middleware\\StartSession::startSession");
     // stackdriver_trace_register("Illuminate\\Session\\Middleware\\StartSession::collectGarbage");
     stackdriver_trace_register_callback("Illuminate\\Database\\Eloquent\\Builder::getModels", stackdriver_trace_callback_eloquent_query);
-    stackdriver_trace_register("Illuminate\\Database\\Eloquent\\Model::performInsert");
-    stackdriver_trace_register("Illuminate\\Database\\Eloquent\\Model::performUpdate");
-    stackdriver_trace_register("Illuminate\\Database\\Eloquent\\Model::delete");
-    stackdriver_trace_register("Illuminate\\Database\\Eloquent\\Model::destroy");
+    // stackdriver_trace_register("Illuminate\\Database\\Eloquent\\Model::performInsert");
+    // stackdriver_trace_register("Illuminate\\Database\\Eloquent\\Model::performUpdate");
+    // stackdriver_trace_register("Illuminate\\Database\\Eloquent\\Model::delete");
+    // stackdriver_trace_register("Illuminate\\Database\\Eloquent\\Model::destroy");
     // stackdriver_trace_register("Illuminate\\Events\\Dispatcher::fire");
     // stackdriver_trace_register("Illuminate\\View\\Engines\\CompilerEngine::get");
     // stackdriver_trace_register("Illuminate\\Routing\\Controller::callAction");
