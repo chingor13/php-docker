@@ -34,7 +34,7 @@ zend_module_entry stackdriver_module_entry = {
     PHP_MINIT(stackdriver),
     PHP_MSHUTDOWN(stackdriver),
     PHP_RINIT(stackdriver),
-    NULL, // name of the RSHUTDOWN function or NULL if not applicable
+    PHP_RSHUTDOWN(stackdriver),
     NULL, // name of the MINFO function or NULL if not applicable
 #if ZEND_MODULE_API_NO >= 20010901
     PHP_STACKDRIVER_VERSION,

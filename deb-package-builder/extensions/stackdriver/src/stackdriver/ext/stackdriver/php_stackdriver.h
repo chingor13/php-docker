@@ -21,6 +21,7 @@ extern zend_module_entry stackdriver_module_entry;
 PHP_MINIT_FUNCTION(stackdriver);
 PHP_MSHUTDOWN_FUNCTION(stackdriver);
 PHP_RINIT_FUNCTION(stackdriver);
+PHP_RSHUTDOWN_FUNCTION(stackdriver);
 
 ZEND_BEGIN_MODULE_GLOBALS(stackdriver)
     /* map of functions we're tracing to callbacks */
