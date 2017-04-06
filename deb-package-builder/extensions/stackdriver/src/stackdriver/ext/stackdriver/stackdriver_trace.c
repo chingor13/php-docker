@@ -219,8 +219,14 @@ PHP_FUNCTION(stackdriver_trace_function)
     zend_string *function_name;
     zval *handler;
 
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "Sz", &function_name, &handler) == FAILURE) {
+    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "S|z", &function_name, &handler) == FAILURE) {
         RETURN_FALSE;
+    }
+
+    if (handler == NULL) {
+        zval h;
+        ZVAL_LONG(&h, 1);
+        handler = &h;
     }
 
     zend_hash_update(STACKDRIVER_G(traced_functions), function_name, handler);
@@ -235,7 +241,7 @@ PHP_FUNCTION(stackdriver_trace_method)
     zend_string *class_name, *function_name, *key;
     zval *handler;
 
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "SSz", &class_name, &function_name, &handler) == FAILURE) {
+    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "SS|z", &class_name, &function_name, &handler) == FAILURE) {
         RETURN_FALSE;
     }
 
@@ -318,6 +324,8 @@ zval *stackdriver_trace_find_callback(zend_string *function_name)
     return zend_hash_find(STACKDRIVER_G(traced_functions), function_name);
 }
 
+// Returns the zval property of the provided zval
+// TODO: there must be a better way to get this than iterating over the HashTable
 static zval *get_property(zval *obj, char *property_name)
 {
     int offset = 0;
@@ -338,7 +346,6 @@ void stackdriver_trace_callback_eloquent_query(struct stackdriver_trace_span_t *
 {
     zend_class_entry *ce = NULL;
     zval *eloquent_model;
-    zend_string *label;
 
     span->name = zend_string_init("eloquent/get", 12, 0);
 
@@ -356,7 +363,6 @@ void stackdriver_trace_callback_eloquent_query(struct stackdriver_trace_span_t *
 void stackdriver_trace_callback_laravel_view(struct stackdriver_trace_span_t *span, zend_execute_data *execute_data TSRMLS_DC)
 {
     zval *path = EX_VAR_NUM(0);
-    zend_string *label;
 
     span->name = zend_string_init("laravel/view", 12, 0);
 
@@ -368,6 +374,12 @@ void stackdriver_trace_callback_laravel_view(struct stackdriver_trace_span_t *sp
 void stackdriver_trace_setup_automatic_tracing()
 {
     // Guzzle
+    stackdriver_trace_register("GuzzleHttp\\Promise\\Promise::wait");
+
+    // curl
+    stackdriver_trace_register("curl_exec");
+    stackdriver_trace_register("curl_multi_add_handle");
+    stackdriver_trace_register("curl_multi_remove_handle");
 
     // Wordpress
     stackdriver_trace_register("get_sidebar");
