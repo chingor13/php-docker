@@ -66,12 +66,15 @@ void stackdriver_trace_execute_callback(struct stackdriver_trace_span_t *span, z
         cb = (stackdriver_trace_callback)Z_PTR_P(span_options);
         cb(span, execute_data TSRMLS_CC);
     } else if (Z_TYPE_P(span_options) == IS_ARRAY) {
+        // php_printf("callback is an array");
         ht = Z_ARR_P(span_options);
         ZEND_HASH_FOREACH_KEY_VAL(ht, idx, k, v) {
             if (strcmp(ZSTR_VAL(k), "labels") == 0) {
                 stackdriver_trace_add_labels(span, Z_ARR_P(v));
-            } else if (ZSTR_VAL(k) == "startTime") {
+            } else if (strcmp(ZSTR_VAL(k), "startTime") == 0) {
                 span->start = Z_DVAL_P(v);
+            } else if (strcmp(ZSTR_VAL(k), "name") == 0) {
+                span->name = Z_STR_P(v);
             }
         } ZEND_HASH_FOREACH_END();
     }
