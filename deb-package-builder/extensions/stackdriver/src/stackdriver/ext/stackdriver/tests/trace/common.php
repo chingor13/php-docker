@@ -1,19 +1,31 @@
 <?php
 
-function bar() {
-  return 1;
+namespace {
+    function bar() {
+      return 1;
+    }
+
+    function foo($x) {
+      $sum = 0;
+      for ($idx = 0; $idx < $x; $idx++) {
+         $sum += bar();
+      }
+      return $sum;
+    }
+
+    class Foo {
+        public function bar() {
+            return 1;
+        }
+    }
 }
 
-function foo($x) {
-  $sum = 0;
-  for ($idx = 0; $idx < 2; $idx++) {
-     $sum += bar();
-  }
-  return strlen("hello: {$x}");
-}
+namespace Illuminate\Database\Eloquent {
+    // fake class with method we know is traced
+    class Model
+    {
+        public function delete() {
 
-class Foo {
-    public function bar() {
-        return 1;
+        }
     }
 }
