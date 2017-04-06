@@ -1,23 +1,33 @@
 #include "php_stackdriver.h"
 #include "stackdriver_trace.h"
 
-void stackdriver_trace_add_labels(struct stackdriver_trace_span_t *span, HashTable *ht)
-{
-    ulong idx;
-    zend_string *k, *copy;
-    zval *v;
+typedef void (*stackdriver_trace_callback)(struct stackdriver_trace_span_t *span, zend_execute_data *data TSRMLS_DC);
+zval *stackdriver_trace_find_callback(zend_string *function_name);
 
+void stackdriver_trace_add_label(struct stackdriver_trace_span_t *span, zend_string *k, zend_string *v)
+{
     // instantiate labels if not already created
     if (span->labels == NULL) {
         span->labels = emalloc(sizeof(HashTable));
         zend_hash_init(span->labels, 4, NULL, ZVAL_PTR_DTOR, 0);
     }
 
+    zend_hash_update_ptr(span->labels, k, v);
+}
+
+void stackdriver_trace_add_labels(struct stackdriver_trace_span_t *span, HashTable *ht)
+{
+    ulong idx;
+    zend_string *k, *copy;
+    zval *v;
+
+
     ZEND_HASH_FOREACH_KEY_VAL(ht, idx, k, v) {
         copy = zend_string_init(Z_STRVAL_P(v), strlen(Z_STRVAL_P(v)), 0);
-        zend_hash_update_ptr(span->labels, k, copy);
+        stackdriver_trace_add_label(span, k, copy);
     } ZEND_HASH_FOREACH_END();
 }
+
 
 void stackdriver_labels_to_zval_array(HashTable *ht, zval *return_value)
 {
@@ -39,20 +49,18 @@ double stackdriver_trace_now()
     return (double) (tv.tv_sec + tv.tv_usec / 1000000.00);
 }
 
-int stackdriver_trace_begin(zend_string *function_name, zval *span_options)
+void stackdriver_trace_execute_callback(struct stackdriver_trace_span_t *span, zend_execute_data *execute_data, zval *span_options TSRMLS_DC)
 {
     HashTable *ht;
     ulong idx;
     zend_string *k;
     zval *v;
-    struct stackdriver_trace_span_t *span = emalloc(sizeof(stackdriver_trace_span_t));
+    stackdriver_trace_callback cb;
 
-    span->start = stackdriver_trace_now();
-    span->name = ZSTR_VAL(function_name);
-    span->span_id = php_mt_rand();
-    span->labels = NULL;
-
-    if (Z_TYPE_P(span_options) == IS_ARRAY) {
+    if (Z_TYPE_P(span_options) == IS_PTR) {
+        cb = (stackdriver_trace_callback)Z_PTR_P(span_options);
+        cb(span, execute_data TSRMLS_CC);
+    } else if (Z_TYPE_P(span_options) == IS_ARRAY) {
         ht = Z_ARR_P(span_options);
         ZEND_HASH_FOREACH_KEY_VAL(ht, idx, k, v) {
             if (strcmp(ZSTR_VAL(k), "labels") == 0) {
@@ -62,6 +70,16 @@ int stackdriver_trace_begin(zend_string *function_name, zval *span_options)
             }
         } ZEND_HASH_FOREACH_END();
     }
+}
+
+struct stackdriver_trace_span_t *stackdriver_trace_begin(zend_string *function_name, zend_execute_data *execute_data TSRMLS_DC)
+{
+    struct stackdriver_trace_span_t *span = emalloc(sizeof(stackdriver_trace_span_t));
+
+    span->start = stackdriver_trace_now();
+    span->name = ZSTR_VAL(function_name);
+    span->span_id = php_mt_rand();
+    span->labels = NULL;
 
     if (STACKDRIVER_G(current_span)) {
         span->parent = STACKDRIVER_G(current_span);
@@ -71,7 +89,7 @@ int stackdriver_trace_begin(zend_string *function_name, zval *span_options)
     STACKDRIVER_G(current_span) = span;
     STACKDRIVER_G(spans)[STACKDRIVER_G(span_count)++] = span;
 
-    return SUCCESS;
+    return span;
 }
 
 int stackdriver_trace_finish()
@@ -137,12 +155,14 @@ PHP_FUNCTION(stackdriver_trace_begin)
 {
     zend_string *function_name;
     zval *span_options;
+    struct stackdriver_trace_span_t *span;
+
     if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "Sa", &function_name, &span_options) == FAILURE) {
         RETURN_FALSE;
     }
 
-    stackdriver_trace_begin(function_name, span_options);
-    // zend_string_release(function_name);
+    span = stackdriver_trace_begin(function_name, execute_data TSRMLS_CC);
+    stackdriver_trace_execute_callback(span, execute_data, span_options TSRMLS_CC);
     RETURN_TRUE;
 }
 
@@ -169,23 +189,19 @@ void stackdriver_trace_execute_internal(zend_execute_data *execute_data,
 void stackdriver_trace_execute_ex (zend_execute_data *execute_data TSRMLS_DC) {
     zend_string *function_name = stackdriver_trace_get_current_function_name();
     zval *trace_handler;
+    struct stackdriver_trace_span_t *span;
 
     if (function_name) {
-        trace_handler = zend_hash_find(STACKDRIVER_G(traced_functions), function_name);
+        trace_handler = stackdriver_trace_find_callback(function_name);
 
         if (trace_handler != NULL) {
-            if (IS_ARRAY == Z_TYPE_INFO_P(trace_handler)) {
-                // this is an array to use as the labels
-            }
-            stackdriver_trace_begin(function_name, trace_handler);
+            span = stackdriver_trace_begin(function_name, execute_data TSRMLS_CC);
             STACKDRIVER_G(_zend_execute_ex)(execute_data TSRMLS_CC);
+            stackdriver_trace_execute_callback(span, execute_data, trace_handler TSRMLS_CC);
             stackdriver_trace_finish();
         } else {
             STACKDRIVER_G(_zend_execute_ex)(execute_data TSRMLS_CC);
         }
-
-        // clean up the zend_string_init from stackdriver_trace_get_current_function_name();
-        // zend_string_release(function_name);
     } else {
         STACKDRIVER_G(_zend_execute_ex)(execute_data TSRMLS_CC);
     }
@@ -204,15 +220,6 @@ PHP_FUNCTION(stackdriver_trace_function)
 
     zend_hash_update(STACKDRIVER_G(traced_functions), function_name, handler);
     RETURN_TRUE;
-}
-
-void stackdriver_trace_register(char *name)
-{
-    zval handler;
-    zend_string *function_name = zend_string_init(name, strlen(name), 0);
-    ZVAL_LONG(&handler, 1);
-
-    zend_hash_add(STACKDRIVER_G(traced_functions), function_name, &handler);
 }
 
 /* {{{ proto int stackdriver_trace_method($class_name, $function_name, $handler)
@@ -270,13 +277,73 @@ PHP_FUNCTION(stackdriver_trace_list)
     }
 }
 
+/** BEGIN Stackdriver Trace Callbacks */
+
+void stackdriver_trace_register(char *name)
+{
+    zval handler;
+    zend_string *function_name = zend_string_init(name, strlen(name), 0);
+    ZVAL_LONG(&handler, 1);
+
+    zend_hash_add(STACKDRIVER_G(traced_functions), function_name, &handler);
+}
+
+void stackdriver_trace_register_callback(char *name, stackdriver_trace_callback cb)
+{
+    zval handler;
+    zend_string *function_name = zend_string_init(name, strlen(name), 0);
+    ZVAL_PTR(&handler, cb);
+
+    zend_hash_add(STACKDRIVER_G(traced_functions), function_name, &handler);
+}
+
+zval *stackdriver_trace_find_callback(zend_string *function_name)
+{
+    return zend_hash_find(STACKDRIVER_G(traced_functions), function_name);
+}
+
+static zval *get_property(zval *obj, char *property_name)
+{
+    int offset = 0;
+    zend_string *k;
+    zend_class_entry *ce = obj->value.obj->ce;
+
+    ZEND_HASH_FOREACH_STR_KEY(&ce->properties_info, k) {
+        if (strcmp(property_name, ZSTR_VAL(k)) == 0) {
+            return &obj->value.obj->properties_table[offset];
+        }
+        offset++;
+    } ZEND_HASH_FOREACH_END();
+
+    return NULL;
+}
+
+void stackdriver_trace_callback_eloquent_query(struct stackdriver_trace_span_t *span, zend_execute_data *data TSRMLS_DC)
+{
+    zend_class_entry *ce = NULL;
+    zval *eloquent_model;
+    zend_string *label;
+
+    span->name = "eloquent/get";
+
+    // obj is the Illuminate\Database\Eloquent\Builder
+    zval *obj = ((data->This.value.obj) ? &(data->This) : NULL);
+    if (obj) {
+        eloquent_model = get_property(obj, "model");
+        if (eloquent_model) {
+            ce = eloquent_model->value.obj->ce;
+            label = zend_string_init("model", 5, 0);
+            stackdriver_trace_add_label(span, label, ce->name);
+        }
+    }
+}
 void stackdriver_trace_setup_automatic_tracing()
 {
     // stackdriver_trace_register("Illuminate\\Foundation\\Application::boot");
     // stackdriver_trace_register("Illuminate\\Foundation\\Application::dispatch");
     // stackdriver_trace_register("Illuminate\\Session\\Middleware\\StartSession::startSession");
     // stackdriver_trace_register("Illuminate\\Session\\Middleware\\StartSession::collectGarbage");
-    stackdriver_trace_register("Illuminate\\Database\\Eloquent\\Builder::getModels");
+    stackdriver_trace_register_callback("Illuminate\\Database\\Eloquent\\Builder::getModels", stackdriver_trace_callback_eloquent_query);
     stackdriver_trace_register("Illuminate\\Database\\Eloquent\\Model::performInsert");
     stackdriver_trace_register("Illuminate\\Database\\Eloquent\\Model::performUpdate");
     stackdriver_trace_register("Illuminate\\Database\\Eloquent\\Model::delete");
