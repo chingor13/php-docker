@@ -182,6 +182,26 @@ PHP_FUNCTION(stackdriver_trace_finish)
     RETURN_FALSE;
 }
 
+void stackdriver_trace_clear(TSRMLS_D)
+{
+    int i;
+    struct stackdriver_trace_span_t *span;
+    for (i = 0; i < STACKDRIVER_G(span_count); i++) {
+        span = STACKDRIVER_G(spans)[i];
+        if (span->labels) {
+            efree(span->labels);
+        }
+        efree(span);
+    }
+    STACKDRIVER_G(span_count) = 0;
+}
+
+PHP_FUNCTION(stackdriver_trace_clear)
+{
+    stackdriver_trace_clear(TSRMLS_C);
+    RETURN_TRUE;
+}
+
 void stackdriver_trace_execute_internal(zend_execute_data *execute_data,
                                                       struct _zend_fcall_info *fci, int ret TSRMLS_DC) {
     php_printf("before internal\n");
@@ -446,7 +466,7 @@ void stackdriver_trace_setup_automatic_tracing()
     stackdriver_trace_register("Memcache::decrement");
 }
 
-void stackdriver_trace_init()
+void stackdriver_trace_init(TSRMLS_D)
 {
     ALLOC_HASHTABLE(STACKDRIVER_G(traced_functions));
     zend_hash_init(STACKDRIVER_G(traced_functions), 16, NULL, ZVAL_PTR_DTOR, 0);
@@ -458,16 +478,8 @@ void stackdriver_trace_init()
     STACKDRIVER_G(span_count) = 0;
 }
 
-void stackdriver_trace_teardown()
+void stackdriver_trace_teardown(TSRMLS_D)
 {
-    int i;
-    struct stackdriver_trace_span_t *span;
-    for (i = 0; i < STACKDRIVER_G(span_count); i++) {
-        span = STACKDRIVER_G(spans)[i];
-        if (span->labels) {
-            efree(span->labels);
-        }
-        efree(span);
-    }
+    stackdriver_trace_clear(TSRMLS_C);
     efree(STACKDRIVER_G(spans));
 }

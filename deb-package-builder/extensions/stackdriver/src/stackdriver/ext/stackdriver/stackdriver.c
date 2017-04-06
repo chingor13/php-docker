@@ -19,6 +19,7 @@ static zend_function_entry stackdriver_functions[] = {
     PHP_FE(stackdriver_trace_list, NULL)
     PHP_FE(stackdriver_trace_begin, NULL)
     PHP_FE(stackdriver_trace_finish, NULL)
+    PHP_FE(stackdriver_trace_clear, NULL)
     PHP_FE(stackdriver_debugger, NULL)
     {NULL, NULL, NULL}
 };
@@ -88,7 +89,7 @@ PHP_MSHUTDOWN_FUNCTION(stackdriver)
 
 PHP_RINIT_FUNCTION(stackdriver)
 {
-    stackdriver_trace_init();
+    stackdriver_trace_init(TSRMLS_C);
     return SUCCESS;
 }
 
@@ -96,7 +97,7 @@ PHP_RINIT_FUNCTION(stackdriver)
  */
 PHP_RSHUTDOWN_FUNCTION(stackdriver)
 {
-    stackdriver_trace_teardown();
+    stackdriver_trace_teardown(TSRMLS_C);
     return SUCCESS;
 }
 /* }}} */
