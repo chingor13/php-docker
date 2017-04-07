@@ -20,6 +20,7 @@ static zend_function_entry stackdriver_functions[] = {
     PHP_FE(stackdriver_trace_begin, NULL)
     PHP_FE(stackdriver_trace_finish, NULL)
     PHP_FE(stackdriver_trace_clear, NULL)
+    PHP_FE(stackdriver_trace_set_context, NULL)
     PHP_FE(stackdriver_trace_context, NULL)
     PHP_FE(stackdriver_debugger, NULL)
     {NULL, NULL, NULL}

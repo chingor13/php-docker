@@ -202,6 +202,16 @@ PHP_FUNCTION(stackdriver_trace_clear)
     RETURN_TRUE;
 }
 
+PHP_FUNCTION(stackdriver_trace_set_context)
+{
+    zend_string *trace_id;
+    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "S|L", &trace_id, &STACKDRIVER_G(trace_parent_span_id)) == FAILURE) {
+        RETURN_FALSE;
+    }
+
+    STACKDRIVER_G(trace_id) = zend_string_copy(trace_id);
+}
+
 PHP_FUNCTION(stackdriver_trace_context)
 {
     struct stackdriver_trace_span_t *span = STACKDRIVER_G(current_span);
@@ -209,6 +219,9 @@ PHP_FUNCTION(stackdriver_trace_context)
     array_init(return_value);
     if (span) {
         add_assoc_long(return_value, "spanId", span->span_id);
+    }
+    if (STACKDRIVER_G(trace_id)) {
+        add_assoc_string(return_value, "traceId", ZSTR_VAL(STACKDRIVER_G(trace_id)));
     }
 }
 
@@ -306,6 +319,8 @@ PHP_FUNCTION(stackdriver_trace_list)
         add_assoc_long(&span, "spanId", trace_span->span_id);
         if (trace_span->parent) {
             add_assoc_long(&span, "parentSpanId", trace_span->parent->span_id);
+        } else if (STACKDRIVER_G(trace_parent_span_id)) {
+            add_assoc_long(&span, "parentSpanId", STACKDRIVER_G(trace_parent_span_id));
         }
         add_assoc_string(&span, "name", ZSTR_VAL(trace_span->name));
         add_assoc_double(&span, "startTime", trace_span->start);
@@ -486,6 +501,7 @@ void stackdriver_trace_init(TSRMLS_D)
     STACKDRIVER_G(current_span) = NULL;
     STACKDRIVER_G(spans) = emalloc(64 * sizeof(struct stackdriver_trace_span_t *));
     STACKDRIVER_G(span_count) = 0;
+    STACKDRIVER_G(trace_id) = NULL;
 }
 
 void stackdriver_trace_teardown(TSRMLS_D)

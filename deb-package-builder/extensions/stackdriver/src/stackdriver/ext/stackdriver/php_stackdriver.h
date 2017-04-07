@@ -34,7 +34,10 @@ ZEND_BEGIN_MODULE_GLOBALS(stackdriver)
     // Trace context
     stackdriver_trace_span_t *current_span;
     stackdriver_trace_span_t **spans;
+
     int span_count;
+    zend_string *trace_id;
+    long trace_parent_span_id;
 ZEND_END_MODULE_GLOBALS(stackdriver)
 
 extern ZEND_DECLARE_MODULE_GLOBALS(stackdriver)
