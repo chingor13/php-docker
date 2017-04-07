@@ -176,7 +176,7 @@ PHP_FUNCTION(stackdriver_trace_begin)
 
 PHP_FUNCTION(stackdriver_trace_finish)
 {
-    if (stackdriver_trace_finish()) {
+    if (stackdriver_trace_finish() == SUCCESS) {
         RETURN_TRUE;
     }
     RETURN_FALSE;
@@ -194,6 +194,9 @@ void stackdriver_trace_clear(TSRMLS_D)
         efree(span);
     }
     STACKDRIVER_G(span_count) = 0;
+    STACKDRIVER_G(current_span) = NULL;
+    STACKDRIVER_G(trace_id) = NULL;
+    STACKDRIVER_G(trace_parent_span_id) = 0;
 }
 
 PHP_FUNCTION(stackdriver_trace_clear)
@@ -205,11 +208,13 @@ PHP_FUNCTION(stackdriver_trace_clear)
 PHP_FUNCTION(stackdriver_trace_set_context)
 {
     zend_string *trace_id;
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "S|L", &trace_id, &STACKDRIVER_G(trace_parent_span_id)) == FAILURE) {
+    long parent_span_id;
+    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "S|L", &trace_id, &parent_span_id) == FAILURE) {
         RETURN_FALSE;
     }
 
     STACKDRIVER_G(trace_id) = zend_string_copy(trace_id);
+    STACKDRIVER_G(trace_parent_span_id) = parent_span_id;
 }
 
 PHP_FUNCTION(stackdriver_trace_context)
@@ -502,6 +507,7 @@ void stackdriver_trace_init(TSRMLS_D)
     STACKDRIVER_G(spans) = emalloc(64 * sizeof(struct stackdriver_trace_span_t *));
     STACKDRIVER_G(span_count) = 0;
     STACKDRIVER_G(trace_id) = NULL;
+    STACKDRIVER_G(trace_parent_span_id) = 0;
 }
 
 void stackdriver_trace_teardown(TSRMLS_D)
