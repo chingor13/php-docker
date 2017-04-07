@@ -427,7 +427,6 @@ void stackdriver_trace_callback_laravel_view(struct stackdriver_trace_span_t *sp
 void stackdriver_trace_setup_automatic_tracing()
 {
     // Guzzle
-    stackdriver_trace_register("GuzzleHttp\\Promise\\Promise::wait");
 
     // curl
     stackdriver_trace_register("curl_exec");
@@ -464,7 +463,7 @@ void stackdriver_trace_setup_automatic_tracing()
     stackdriver_trace_register("PDO::__construct");
     stackdriver_trace_register("PDOStatement::execute");
 
-    // ysql
+    // mysql
     stackdriver_trace_register("mysql_query");
     stackdriver_trace_register("mysql_connect");
 
