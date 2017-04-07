@@ -10,6 +10,7 @@ PHP_FUNCTION(stackdriver_trace_list);
 PHP_FUNCTION(stackdriver_trace_begin);
 PHP_FUNCTION(stackdriver_trace_finish);
 PHP_FUNCTION(stackdriver_trace_clear);
+PHP_FUNCTION(stackdriver_trace_context);
 
 void stackdriver_trace_execute_internal(zend_execute_data *execute_data,
                                                       struct _zend_fcall_info *fci, int ret TSRMLS_DC);

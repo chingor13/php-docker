@@ -17,6 +17,10 @@ namespace {
         public function bar() {
             return 1;
         }
+
+        public function context() {
+            return stackdriver_trace_context();
+        }
     }
 }
 

@@ -202,6 +202,16 @@ PHP_FUNCTION(stackdriver_trace_clear)
     RETURN_TRUE;
 }
 
+PHP_FUNCTION(stackdriver_trace_context)
+{
+    struct stackdriver_trace_span_t *span = STACKDRIVER_G(current_span);
+
+    array_init(return_value);
+    if (span) {
+        add_assoc_long(return_value, "spanId", span->span_id);
+    }
+}
+
 void stackdriver_trace_execute_internal(zend_execute_data *execute_data,
                                                       struct _zend_fcall_info *fci, int ret TSRMLS_DC) {
     php_printf("before internal\n");
