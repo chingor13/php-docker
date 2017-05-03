@@ -36,9 +36,12 @@ apt-get install -y \
         gcp-php56-pq \
         gcp-php56-rdkafka \
         gcp-php56-redis \
-        gcp-php56-suhosin
+        gcp-php56-suhosin \
+        --no-install-recommends
 
 # Enable some extensions for backward compatibility
+ln -s ${PHP56_DIR}/bin/php56-enmod ${PHP56_DIR}/bin/php-enmod
+ln -s ${PHP56_DIR}/bin/php56-dismod ${PHP56_DIR}/bin/php-dismod
 ${PHP56_DIR}/bin/php56-enmod apcu
 ${PHP56_DIR}/bin/php56-enmod json
 ${PHP56_DIR}/bin/php56-enmod mailparse

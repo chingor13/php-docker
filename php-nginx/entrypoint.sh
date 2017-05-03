@@ -42,7 +42,7 @@ if [ -f "${NGINX_CONF_INCLUDE}" ]; then
 fi
 
 if [ -f "${NGINX_CONF_OVERRIDE}" ]; then
-    mv "${NGINX_CONF_OVERRIDE}" "${NGINX_DIR}/conf/nginx.conf"
+    mv "${NGINX_CONF_OVERRIDE}" "${NGINX_DIR}/nginx.conf"
 fi
 
 # User provided php-fpm.conf
@@ -106,7 +106,7 @@ if [ -z "${DOCUMENT_ROOT}" ]; then
     DOCUMENT_ROOT="${APP_DIR}"
 fi
 
-sed -i "s|%%DOC_ROOT%%|${DOCUMENT_ROOT}|g" "${NGINX_DIR}/conf/nginx.conf"
+sed -i "s|%%DOC_ROOT%%|${DOCUMENT_ROOT}|g" "${NGINX_DIR}/nginx.conf"
 
 if [ -f "${APP_DIR}/composer.json" ]; then
     # run the composer scripts for post-deploy
@@ -133,7 +133,7 @@ if [ -x "${PHP56_DIR}/bin/php56-enmod" ]; then
 fi
 
 # Whitelist functions
-${PHP_DIR}/bin/php /whitelist_functions.php
+${PHP_DIR}/bin/php -d auto_prepend_file='' /whitelist_functions.php
 
 # Remove loose php-cli.ini
 rm /opt/php/lib/php-cli.ini

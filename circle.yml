@@ -10,9 +10,11 @@ machine:
     TEST_BUILD_DIR: ${HOME}
     PHP_DOCKER_GOOGLE_CREDENTIALS: ${HOME}/credentials.json
     GOOGLE_PROJECT_ID: php-mvm-a
+    E2E_PROJECT_ID: php-mvm-a
     TAG: circle-${CIRCLE_BUILD_NUM}
     RUNTIME_DISTRIBUTION: gcp-php-runtime-jessie-unstable
-    BUILDER_TARGET_IMAGE: gcr.io/${GOOGLE_PROJECT_ID}/php-nginx
+    BUILDER_TARGET_IMAGE: gcr.io/${GOOGLE_PROJECT_ID}/php
+    RUN_E2E_TESTS: true
 
 dependencies:
   override:
@@ -20,5 +22,6 @@ dependencies:
 
 test:
   override:
-    - scripts/run_test_suite.sh
+    - scripts/run_test_suite.sh:
+        timeout: 1800
     - scripts/run_builder_test.sh

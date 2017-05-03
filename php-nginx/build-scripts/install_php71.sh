@@ -33,9 +33,12 @@ apt-get install -y \
         gcp-php71-oauth \
         gcp-php71-pq \
         gcp-php71-rdkafka \
-        gcp-php71-redis
+        gcp-php71-redis \
+        --no-install-recommends
 
 # Enable some extensions for backward compatibility
+ln -s ${PHP71_DIR}/bin/php71-enmod ${PHP71_DIR}/bin/php-enmod
+ln -s ${PHP71_DIR}/bin/php71-dismod  ${PHP71_DIR}/bin/php-dismod
 ${PHP71_DIR}/bin/php71-enmod apcu-bc
 ${PHP71_DIR}/bin/php71-enmod mailparse
 ${PHP71_DIR}/bin/php71-enmod memcached
