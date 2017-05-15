@@ -1,8 +1,8 @@
 runtime: custom
 env: flex
 
-manual_scaling:
-  instances: 1
+runtime_config:
+  document_root: web
 
 env_variables:
   WHITELIST_FUNCTIONS: phpinfo,exec
