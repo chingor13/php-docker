@@ -11,7 +11,7 @@ EXT_VERSION="0.1.1"
 PACKAGE_VERSION="${EXT_VERSION}-${PHP_VERSION}"
 PACKAGE_FULL_VERSION="${EXT_VERSION}-${FULL_VERSION}"
 PACKAGE_DIR=${PNAME}-${PACKAGE_VERSION}
-cp -R ${DEB_BUILDER_DIR}/extensions/stackdriver/src/stackdriver/ext/stackdriver ${PACKAGE_DIR}
+cp -R ${DEB_BUILDER_DIR}/extensions/stackdriver/src ${PACKAGE_DIR}/stackdriver
 cp -R ${DEB_BUILDER_DIR}/extensions/stackdriver/debian ${PACKAGE_DIR}/
 
 pwd

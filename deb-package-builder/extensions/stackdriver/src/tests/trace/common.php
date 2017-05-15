@@ -14,6 +14,10 @@ namespace {
     }
 
     class Foo {
+        public static function asdf() {
+            return 'qwer';
+        }
+
         public function bar() {
             return 1;
         }
