@@ -48,7 +48,7 @@ class PHP56CustomConfigTest extends \PHPUnit_Framework_TestCase
     public function testNginxUserConf()
     {
         $resp = $this->client->get(
-            'readfile.php?f=' . urlencode('/etc/nginx/conf.d/nginx-user.conf')
+            'readfile.php?f=' . urlencode('/etc/nginx/conf.d/nginx-app.conf')
         );
         $this->assertEquals(
             '200',
@@ -57,6 +57,22 @@ class PHP56CustomConfigTest extends \PHPUnit_Framework_TestCase
         );
         $this->assertContains(
             'nginx-user.conf',
+            $resp->getBody()->getContents()
+        );
+    }
+
+    public function testNginxCostomHttpConf()
+    {
+        $resp = $this->client->get(
+            'readfile.php?f=' . urlencode('/etc/nginx/conf.d/nginx-http.conf')
+        );
+        $this->assertEquals(
+            '200',
+            $resp->getStatusCode(),
+            'readfile status code'
+        );
+        $this->assertContains(
+            'nginx-custom-http.conf',
             $resp->getBody()->getContents()
         );
     }
