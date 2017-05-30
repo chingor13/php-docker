@@ -43,10 +43,6 @@ ZEND_BEGIN_MODULE_GLOBALS(stackdriver)
     /* map of functions we're tracing to callbacks */
     HashTable *traced_functions;
 
-    /* old zend execute functions */
-    void (*_zend_execute_ex) (zend_execute_data *execute_data TSRMLS_DC);
-    void (*_zend_execute_internal) (zend_execute_data *data, struct _zend_fcall_info *fci, int ret TSRMLS_DC);
-
     // Trace context
     stackdriver_trace_span_t *current_span;
     stackdriver_trace_span_t **spans;

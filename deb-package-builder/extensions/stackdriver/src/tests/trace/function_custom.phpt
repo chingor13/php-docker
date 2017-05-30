@@ -1,5 +1,5 @@
 --TEST--
-Stackdriver Trace: customize the trace span options for a function
+Stackdriver Trace: Customize the trace span options for a function
 --FILE--
 <?php
 

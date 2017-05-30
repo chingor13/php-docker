@@ -20,9 +20,6 @@
 #include "stackdriver_debugger.h"
 #include "zend_extensions.h"
 
-void (*_zend_execute_internal) (zend_execute_data *data,
-                      struct _zend_fcall_info *fci, int ret TSRMLS_DC);
-
 ZEND_DECLARE_MODULE_GLOBALS(stackdriver)
 
 // list of custom PHP functions provided by this extension
@@ -76,6 +73,7 @@ static void php_stackdriver_globals_ctor(void *pDest TSRMLS_DC)
  */
 PHP_MINIT_FUNCTION(stackdriver)
 {
+    // allocate global request variables
 #ifdef ZTS
     ts_allocate_id(&stackdriver_globals_id, sizeof(zend_stackdriver_globals), php_stackdriver_globals_ctor, NULL);
 #else

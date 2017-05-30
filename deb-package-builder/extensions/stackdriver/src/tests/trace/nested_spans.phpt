@@ -1,5 +1,5 @@
 --TEST--
-Stackdriver Trace: nested spans
+Stackdriver Trace: Nested spans
 --FILE--
 <?php
 
