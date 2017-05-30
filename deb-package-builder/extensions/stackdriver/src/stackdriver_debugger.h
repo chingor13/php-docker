@@ -20,4 +20,9 @@
 // Debugger functions
 PHP_FUNCTION(stackdriver_debugger);
 
+// Extension lifecycle hooks
+int stackdriver_debugger_minit(INIT_FUNC_ARGS);
+int stackdriver_debugger_rinit(TSRMLS_D);
+int stackdriver_debugger_rshutdown(TSRMLS_D);
+
 #endif

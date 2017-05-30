@@ -514,6 +514,9 @@ int stackdriver_trace_minit(INIT_FUNC_ARGS)
     original_zend_execute_ex = zend_execute_ex;
     zend_execute_ex = stackdriver_trace_execute_ex;
 
+    stackdriver_trace_span_minit(INIT_FUNC_ARGS_PASSTHRU);
+    stackdriver_trace_context_minit(INIT_FUNC_ARGS_PASSTHRU);
+
     return SUCCESS;
 }
 

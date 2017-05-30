@@ -32,3 +32,18 @@ PHP_FUNCTION(stackdriver_debugger)
         }
     } ZEND_HASH_FOREACH_END();
 }
+
+int stackdriver_debugger_minit(INIT_FUNC_ARGS)
+{
+    return SUCCESS;
+}
+
+int stackdriver_debugger_rinit(TSRMLS_D)
+{
+    return SUCCESS;
+}
+
+int stackdriver_debugger_rshutdown(TSRMLS_D)
+{
+    return SUCCESS;
+}

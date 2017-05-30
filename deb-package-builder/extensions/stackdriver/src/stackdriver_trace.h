@@ -32,8 +32,7 @@ PHP_FUNCTION(stackdriver_trace_clear);
 PHP_FUNCTION(stackdriver_trace_set_context);
 PHP_FUNCTION(stackdriver_trace_context);
 
-void stackdriver_trace_execute_ex (zend_execute_data *execute_data TSRMLS_DC);
-
+// Extension lifecycle hooks
 int stackdriver_trace_minit(INIT_FUNC_ARGS);
 int stackdriver_trace_rinit(TSRMLS_D);
 int stackdriver_trace_rshutdown(TSRMLS_D);

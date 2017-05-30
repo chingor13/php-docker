@@ -22,8 +22,7 @@
 
 ZEND_DECLARE_MODULE_GLOBALS(stackdriver)
 
-// list of custom PHP functions provided by this extension
-// set {NULL, NULL, NULL} as the last record to mark the end of list
+// List of functions provided by this extension
 static zend_function_entry stackdriver_functions[] = {
     PHP_FE(stackdriver_version, NULL)
     PHP_FE(stackdriver_trace_function, NULL)
@@ -35,14 +34,12 @@ static zend_function_entry stackdriver_functions[] = {
     PHP_FE(stackdriver_trace_set_context, NULL)
     PHP_FE(stackdriver_trace_context, NULL)
     PHP_FE(stackdriver_debugger, NULL)
-    {NULL, NULL, NULL}
+    PHP_FE_END
 };
 
-// the following code creates an entry for the module and registers it with Zend.
+// Registers the lifecycle hooks for this extension
 zend_module_entry stackdriver_module_entry = {
-#if ZEND_MODULE_API_NO >= 20010901
     STANDARD_MODULE_HEADER,
-#endif
     PHP_STACKDRIVER_EXTNAME,
     stackdriver_functions,
     PHP_MINIT(stackdriver),
@@ -50,9 +47,7 @@ zend_module_entry stackdriver_module_entry = {
     PHP_RINIT(stackdriver),
     PHP_RSHUTDOWN(stackdriver),
     NULL, // name of the MINFO function or NULL if not applicable
-#if ZEND_MODULE_API_NO >= 20010901
     PHP_STACKDRIVER_VERSION,
-#endif
     STANDARD_MODULE_PROPERTIES
 };
 
@@ -81,8 +76,7 @@ PHP_MINIT_FUNCTION(stackdriver)
 #endif
 
     stackdriver_trace_minit(INIT_FUNC_ARGS_PASSTHRU);
-    stackdriver_trace_span_minit(INIT_FUNC_ARGS_PASSTHRU);
-    stackdriver_trace_context_minit(INIT_FUNC_ARGS_PASSTHRU);
+    stackdriver_debugger_minit(INIT_FUNC_ARGS_PASSTHRU);
 
     return SUCCESS;
 }
