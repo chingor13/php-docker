@@ -17,6 +17,8 @@
 #include "php.h"
 #include "php_stackdriver.h"
 #include "stackdriver_trace.h"
+#include "stackdriver_trace_span.h"
+#include "stackdriver_trace_context.h"
 #include "stackdriver_debugger.h"
 #include "zend_extensions.h"
 
@@ -88,6 +90,9 @@ PHP_MINIT_FUNCTION(stackdriver)
     // Save original zend execute functions and use our own to instrument function calls
     STACKDRIVER_G(_zend_execute_ex) = zend_execute_ex;
     zend_execute_ex = stackdriver_trace_execute_ex;
+
+    stackdriver_trace_span_minit(INIT_FUNC_ARGS_PASSTHRU);
+    stackdriver_trace_context_minit(INIT_FUNC_ARGS_PASSTHRU);
 
     // STACKDRIVER_G(_zend_execute_internal) = zend_execute_internal;
     // zend_execute_internal = stackdriver_trace_execute_internal;

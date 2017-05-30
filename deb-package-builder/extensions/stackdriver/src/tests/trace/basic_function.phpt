@@ -12,15 +12,15 @@ $traces = stackdriver_trace_list();
 echo "Number of traces: " . count($traces) . "\n";
 $span = $traces[0];
 
-$test = gettype($span['spanId']);
+$test = gettype($span->spanId());
 echo "Span id is a $test\n";
 
-echo "Span name is: '{$span['name']}'\n";
+echo "Span name is: '{$span->name()}'\n";
 
-$test = gettype($span['startTime']) == 'double';
+$test = gettype($span->startTime()) == 'double';
 echo "Span startTime is a double: $test\n";
 
-$test = gettype($span['endTime']) == 'double';
+$test = gettype($span->endTime()) == 'double';
 echo "Span endTime is a double: $test\n";
 
 ?>

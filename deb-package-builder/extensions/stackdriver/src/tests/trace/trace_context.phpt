@@ -15,11 +15,11 @@ $traces = stackdriver_trace_list();
 echo "Number of traces: " . count($traces) . "\n";
 $span = $traces[0];
 
-$test = $span['spanId'] == $context['spanId'];
+$test = $span->spanId() == $context->spanId();
 echo "Span id matches context's span id: $test\n";
 
-echo "Span parent id: {$span['parentSpanId']}\n";
-echo "Context trace id: {$context['traceId']}\n";
+echo "Span parent id: {$span->parentSpanId()}\n";
+echo "Context trace id: {$context->traceId()}\n";
 ?>
 --EXPECT--
 Number of traces: 1

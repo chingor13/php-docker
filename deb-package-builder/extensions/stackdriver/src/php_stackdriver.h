@@ -64,5 +64,4 @@ extern ZEND_DECLARE_MODULE_GLOBALS(stackdriver)
 #define        STACKDRIVER_G(v)        (stackdriver_globals.v)
 #endif
 
-
 #endif /* PHP_STACKDRIVER_H */

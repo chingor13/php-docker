@@ -16,6 +16,8 @@
 
 #include "php_stackdriver.h"
 #include "stackdriver_trace.h"
+#include "stackdriver_trace_span.h"
+#include "stackdriver_trace_context.h"
 #include "Zend/zend_compile.h"
 
 typedef void (*stackdriver_trace_callback)(struct stackdriver_trace_span_t *span, zend_execute_data *data TSRMLS_DC);
@@ -236,13 +238,13 @@ PHP_FUNCTION(stackdriver_trace_set_context)
 PHP_FUNCTION(stackdriver_trace_context)
 {
     struct stackdriver_trace_span_t *span = STACKDRIVER_G(current_span);
+    object_init_ex(return_value, stackdriver_trace_context_ce);
 
-    array_init(return_value);
     if (span) {
-        add_assoc_long(return_value, "spanId", span->span_id);
+        zend_update_property_long(stackdriver_trace_context_ce, return_value, "spanId", sizeof("spanId") - 1, span->span_id);
     }
     if (STACKDRIVER_G(trace_id)) {
-        add_assoc_string(return_value, "traceId", ZSTR_VAL(STACKDRIVER_G(trace_id)));
+        zend_update_property_str(stackdriver_trace_context_ce, return_value, "traceId", sizeof("traceId") - 1, STACKDRIVER_G(trace_id));
     }
 }
 
@@ -333,24 +335,22 @@ PHP_FUNCTION(stackdriver_trace_list)
 
     for (i = 0; i < num_spans; i++) {
         zval span;
-        array_init(&span);
+        object_init_ex(&span, stackdriver_trace_span_ce);
 
         trace_span = STACKDRIVER_G(spans)[i];
-
-        add_assoc_long(&span, "spanId", trace_span->span_id);
+        zend_update_property_long(stackdriver_trace_span_ce, &span, "spanId", sizeof("spanId") - 1, trace_span->span_id);
         if (trace_span->parent) {
-            add_assoc_long(&span, "parentSpanId", trace_span->parent->span_id);
+            zend_update_property_long(stackdriver_trace_span_ce, &span, "parentSpanId", sizeof("parentSpanId") - 1, trace_span->parent->span_id);
         } else if (STACKDRIVER_G(trace_parent_span_id)) {
-            add_assoc_long(&span, "parentSpanId", STACKDRIVER_G(trace_parent_span_id));
+            zend_update_property_long(stackdriver_trace_span_ce, &span, "parentSpanId", sizeof("parentSpanId") - 1, STACKDRIVER_G(trace_parent_span_id));
         }
-        add_assoc_string(&span, "name", ZSTR_VAL(trace_span->name));
-        add_assoc_double(&span, "startTime", trace_span->start);
-        add_assoc_double(&span, "endTime", trace_span->stop);
-
+        zend_update_property_str(stackdriver_trace_span_ce, &span, "name", sizeof("name") - 1, trace_span->name);
+        zend_update_property_double(stackdriver_trace_span_ce, &span, "startTime", sizeof("startTime") - 1, trace_span->start);
+        zend_update_property_double(stackdriver_trace_span_ce, &span, "endTime", sizeof("endTime") - 1, trace_span->stop);
         if (trace_span->labels) {
             zval labels;
             stackdriver_labels_to_zval_array(trace_span->labels, &labels);
-            add_assoc_zval(&span, "labels", &labels);
+            zend_update_property(stackdriver_trace_span_ce, &span, "labels", sizeof("labels") - 1, &labels);
         }
 
         add_next_index_zval(return_value, &span);

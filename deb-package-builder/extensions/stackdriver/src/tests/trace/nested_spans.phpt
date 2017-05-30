@@ -15,14 +15,14 @@ $span1 = $traces[0];
 $span2 = $traces[1];
 $span3 = $traces[2];
 
-echo "Span 1 name is: '{$span1['name']}'\n";
-echo "Span 2 name is: '{$span2['name']}'\n";
-echo "Span 3 name is: '{$span3['name']}'\n";
+echo "Span 1 name is: '{$span1->name()}'\n";
+echo "Span 2 name is: '{$span2->name()}'\n";
+echo "Span 3 name is: '{$span3->name()}'\n";
 
-$test = $span1['spanId'] == $span2['parentSpanId'];
+$test = $span1->spanId() == $span2->parentSpanId();
 echo "Span 2's parent is span 1: $test\n";
 
-$test = $span1['spanId'] == $span3['parentSpanId'];
+$test = $span1->spanId() == $span3->parentSpanId();
 echo "Span 3's parent is span 1: $test\n";
 
 ?>
