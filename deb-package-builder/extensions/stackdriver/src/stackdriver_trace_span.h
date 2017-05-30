@@ -21,4 +21,16 @@
 
 extern zend_class_entry* stackdriver_trace_span_ce;
 
+// TraceSpan struct
+typedef struct stackdriver_trace_span_t {
+    zend_string *name;
+    uint32_t span_id;
+    double start;
+    double stop;
+    struct stackdriver_trace_span_t *parent;
+
+    // zend_string* => zend_string*
+    HashTable *labels;
+} stackdriver_trace_span_t;
+
 #endif /* PHP_STACKDRIVER_TRACE_SPAN_H */

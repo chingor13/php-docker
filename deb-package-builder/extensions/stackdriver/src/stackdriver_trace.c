@@ -20,6 +20,8 @@
 #include "stackdriver_trace_context.h"
 #include "Zend/zend_compile.h"
 
+void (*original_zend_execute_ex) (zend_execute_data *execute_data TSRMLS_DC);
+
 typedef void (*stackdriver_trace_callback)(struct stackdriver_trace_span_t *span, zend_execute_data *data TSRMLS_DC);
 zval *stackdriver_trace_find_callback(zend_string *function_name);
 
@@ -270,14 +272,14 @@ void stackdriver_trace_execute_ex (zend_execute_data *execute_data TSRMLS_DC) {
 
         if (trace_handler != NULL) {
             span = stackdriver_trace_begin(function_name, execute_data TSRMLS_CC);
-            STACKDRIVER_G(_zend_execute_ex)(execute_data TSRMLS_CC);
+            original_zend_execute_ex(execute_data TSRMLS_CC);
             stackdriver_trace_execute_callback(span, execute_data, trace_handler TSRMLS_CC);
             stackdriver_trace_finish();
         } else {
-            STACKDRIVER_G(_zend_execute_ex)(execute_data TSRMLS_CC);
+            original_zend_execute_ex(execute_data TSRMLS_CC);
         }
     } else {
-        STACKDRIVER_G(_zend_execute_ex)(execute_data TSRMLS_CC);
+        original_zend_execute_ex(execute_data TSRMLS_CC);
     }
 }
 
@@ -511,7 +513,16 @@ void stackdriver_trace_setup_automatic_tracing()
     stackdriver_trace_register("Memcache::decrement");
 }
 
-void stackdriver_trace_init(TSRMLS_D)
+int stackdriver_trace_minit(INIT_FUNC_ARGS)
+{
+    // Save original zend execute functions and use our own to instrument function calls
+    original_zend_execute_ex = zend_execute_ex;
+    zend_execute_ex = stackdriver_trace_execute_ex;
+
+    return SUCCESS;
+}
+
+int stackdriver_trace_rinit(TSRMLS_D)
 {
     ALLOC_HASHTABLE(STACKDRIVER_G(traced_functions));
     zend_hash_init(STACKDRIVER_G(traced_functions), 16, NULL, ZVAL_PTR_DTOR, 0);
@@ -523,10 +534,14 @@ void stackdriver_trace_init(TSRMLS_D)
     STACKDRIVER_G(span_count) = 0;
     STACKDRIVER_G(trace_id) = NULL;
     STACKDRIVER_G(trace_parent_span_id) = 0;
+
+    return SUCCESS;
 }
 
-void stackdriver_trace_teardown(TSRMLS_D)
+int stackdriver_trace_rshutdown(TSRMLS_D)
 {
     stackdriver_trace_clear(TSRMLS_C);
     efree(STACKDRIVER_G(spans));
+
+    return SUCCESS;
 }

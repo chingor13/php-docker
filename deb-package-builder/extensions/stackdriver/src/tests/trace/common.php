@@ -1,11 +1,14 @@
 <?php
 
-namespace {
-    function bar() {
+namespace
+{
+    function bar()
+    {
       return 1;
     }
 
-    function foo($x) {
+    function foo($x)
+    {
       $sum = 0;
       for ($idx = 0; $idx < $x; $idx++) {
          $sum += bar();
@@ -13,22 +16,27 @@ namespace {
       return $sum;
     }
 
-    class Foo {
-        public static function asdf() {
+    class Foo
+    {
+        public static function asdf()
+        {
             return 'qwer';
         }
 
-        public function bar() {
+        public function bar()
+        {
             return 1;
         }
 
-        public function context() {
+        public function context()
+        {
             return stackdriver_trace_context();
         }
     }
 }
 
-namespace Illuminate\Database\Eloquent {
+namespace Illuminate\Database\Eloquent
+{
     // fake class with method we know is traced
     class Model
     {

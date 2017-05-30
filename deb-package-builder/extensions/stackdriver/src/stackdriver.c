@@ -17,12 +17,9 @@
 #include "php.h"
 #include "php_stackdriver.h"
 #include "stackdriver_trace.h"
-#include "stackdriver_trace_span.h"
-#include "stackdriver_trace_context.h"
 #include "stackdriver_debugger.h"
 #include "zend_extensions.h"
 
-void (*_zend_execute_ex) (zend_execute_data *execute_data TSRMLS_DC);
 void (*_zend_execute_internal) (zend_execute_data *data,
                       struct _zend_fcall_info *fci, int ret TSRMLS_DC);
 
@@ -79,25 +76,16 @@ static void php_stackdriver_globals_ctor(void *pDest TSRMLS_DC)
  */
 PHP_MINIT_FUNCTION(stackdriver)
 {
-    // php_printf("stackdriver MINIT...\n");
-
 #ifdef ZTS
     ts_allocate_id(&stackdriver_globals_id, sizeof(zend_stackdriver_globals), php_stackdriver_globals_ctor, NULL);
 #else
     php_stackdriver_globals_ctor(&php_stackdriver_globals_ctor);
 #endif
 
-    // Save original zend execute functions and use our own to instrument function calls
-    STACKDRIVER_G(_zend_execute_ex) = zend_execute_ex;
-    zend_execute_ex = stackdriver_trace_execute_ex;
-
+    stackdriver_trace_minit(INIT_FUNC_ARGS_PASSTHRU);
     stackdriver_trace_span_minit(INIT_FUNC_ARGS_PASSTHRU);
     stackdriver_trace_context_minit(INIT_FUNC_ARGS_PASSTHRU);
 
-    // STACKDRIVER_G(_zend_execute_internal) = zend_execute_internal;
-    // zend_execute_internal = stackdriver_trace_execute_internal;
-
-    // php_printf("... done MINIT\n");
     return SUCCESS;
 }
 /* }}} */
@@ -112,7 +100,7 @@ PHP_MSHUTDOWN_FUNCTION(stackdriver)
 
 PHP_RINIT_FUNCTION(stackdriver)
 {
-    stackdriver_trace_init(TSRMLS_C);
+    stackdriver_trace_rinit(TSRMLS_C);
     return SUCCESS;
 }
 
@@ -120,7 +108,7 @@ PHP_RINIT_FUNCTION(stackdriver)
  */
 PHP_RSHUTDOWN_FUNCTION(stackdriver)
 {
-    stackdriver_trace_teardown(TSRMLS_C);
+    stackdriver_trace_rshutdown(TSRMLS_C);
     return SUCCESS;
 }
 /* }}} */
