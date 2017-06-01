@@ -17,8 +17,6 @@
 #ifndef PHP_STACKDRIVER_TRACE_H
 #define PHP_STACKDRIVER_TRACE_H 1
 
-#include <sys/time.h>
-
 #include "stackdriver_trace_span.h"
 #include "stackdriver_trace_context.h"
 

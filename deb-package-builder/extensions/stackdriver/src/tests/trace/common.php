@@ -16,6 +16,11 @@ namespace
       return $sum;
     }
 
+    function add($a, $b)
+    {
+        return $a + $b;
+    }
+
     class Foo
     {
         public static function asdf()
@@ -26,6 +31,11 @@ namespace
         public function bar()
         {
             return 1;
+        }
+
+        public function add($a, $b)
+        {
+            return $a + $b;
         }
 
         public function context()

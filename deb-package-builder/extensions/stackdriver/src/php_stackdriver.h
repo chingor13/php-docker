@@ -29,6 +29,10 @@
 #define PHP_STACKDRIVER_VERSION "0.1"
 #define PHP_STACKDRIVER_EXTNAME "stackdriver"
 
+#define PHP_STACKDRIVER_MAKE_STD_ZVAL(pzv) \
+  pzv = (zval *)emalloc(sizeof(zval));
+#define PHP_GRPC_FREE_STD_ZVAL(pzv) efree(pzv);
+
 PHP_FUNCTION(stackdriver_version);
 
 extern zend_module_entry stackdriver_module_entry;

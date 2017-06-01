@@ -23,6 +23,7 @@ echo "Span startTime is a double: $test\n";
 $test = gettype($span->endTime()) == 'double';
 echo "Span endTime is a double: $test\n";
 
+var_dump($span->labels());
 ?>
 --EXPECT--
 Number of traces: 1
@@ -30,3 +31,5 @@ Span id is a integer
 Span name is: 'bar'
 Span startTime is a double: 1
 Span endTime is a double: 1
+array(0) {
+}

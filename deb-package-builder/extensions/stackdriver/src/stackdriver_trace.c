@@ -15,10 +15,12 @@
  */
 
 #include "php_stackdriver.h"
+#include <sys/time.h>
 #include "stackdriver_trace.h"
 #include "stackdriver_trace_span.h"
 #include "stackdriver_trace_context.h"
 #include "Zend/zend_compile.h"
+#include "Zend/zend_closures.h"
 
 // True global for storing the original zend_execute_ex function pointer
 void (*original_zend_execute_ex) (zend_execute_data *execute_data TSRMLS_DC);
@@ -33,45 +35,66 @@ static zval *stackdriver_trace_find_callback(zend_string *function_name)
     return zend_hash_find(STACKDRIVER_G(traced_functions), function_name);
 }
 
-static void stackdriver_trace_add_label(stackdriver_trace_span_t *span, zend_string *k, zend_string *v)
+static int stackdriver_trace_add_label(stackdriver_trace_span_t *span, zend_string *k, zend_string *v)
 {
+    zval zv;
+
+    // instantiate labels if not already created
+    if (span->labels == NULL) {
+        span->labels = emalloc(sizeof(HashTable));
+        zend_hash_init(span->labels, 4, NULL, ZVAL_PTR_DTOR, 0);
+        // zend_hash_init(span->labels, 4, NULL, NULL, 0);
+    }
+
+    // put the string value into a zval and save it in the HashTable
+    ZVAL_STRING(&zv, ZSTR_VAL(v));
+    dump_zval(&zv);
+
+    if (zend_hash_update(span->labels, zend_string_copy(k), &zv) == NULL) {
+        php_printf("failed to update label hash table\n");
+        return FAILURE;
+    } else {
+        return SUCCESS;
+    }
+}
+
+static int stackdriver_trace_add_label_str(stackdriver_trace_span_t *span, char *k, zend_string *v)
+{
+    return stackdriver_trace_add_label(span, zend_string_init(k, strlen(k), 0), v);
+}
+
+static int stackdriver_trace_add_labels_merge(stackdriver_trace_span_t *span, zval *label_array)
+{
+    ulong idx;
+    zend_string *k;
+    zval *v;
+    HashTable *ht = Z_ARRVAL_P(label_array);
     // instantiate labels if not already created
     if (span->labels == NULL) {
         span->labels = emalloc(sizeof(HashTable));
         zend_hash_init(span->labels, 4, NULL, ZVAL_PTR_DTOR, 0);
     }
 
-    zend_hash_update_ptr(span->labels, k, v);
+    zend_hash_merge(span->labels, ht, zval_add_ref, 0);
+    return SUCCESS;
 }
 
-static void stackdriver_trace_add_label_str(stackdriver_trace_span_t *span, char *k, zend_string *v)
-{
-    stackdriver_trace_add_label(span, zend_string_init(k, strlen(k), 0), v);
-}
-
-static void stackdriver_trace_add_labels(stackdriver_trace_span_t *span, HashTable *ht)
+static int stackdriver_trace_add_labels(stackdriver_trace_span_t *span, zval *label_array)
 {
     ulong idx;
-    zend_string *k, *copy;
+    zend_string *k;
     zval *v;
+    HashTable *ht = Z_ARRVAL_P(label_array);
 
     ZEND_HASH_FOREACH_KEY_VAL(ht, idx, k, v) {
-        copy = zend_string_init(Z_STRVAL_P(v), strlen(Z_STRVAL_P(v)), 0);
-        stackdriver_trace_add_label(span, k, copy);
+        if (stackdriver_trace_add_label(span, k, Z_STR_P(v)) != SUCCESS) {
+            php_printf("failed to add label\n");
+            return FAILURE;
+        }
     } ZEND_HASH_FOREACH_END();
+    return SUCCESS;
 }
 
-static void stackdriver_labels_to_zval_array(HashTable *ht, zval *return_value)
-{
-    ulong idx;
-    zend_string *k, *v;
-
-    array_init(return_value);
-
-    ZEND_HASH_FOREACH_KEY_PTR(ht, idx, k, v) {
-        add_assoc_string(return_value, ZSTR_VAL(k), ZSTR_VAL(v));
-    } ZEND_HASH_FOREACH_END();
-}
 
 static double stackdriver_trace_now()
 {
@@ -81,29 +104,80 @@ static double stackdriver_trace_now()
     return (double) (tv.tv_sec + tv.tv_usec / 1000000.00);
 }
 
-static void stackdriver_trace_execute_callback(stackdriver_trace_span_t *span, zend_execute_data *execute_data, zval *span_options TSRMLS_DC)
+// Update the provided span with the provided zval (array) of span options
+static void stackdriver_trace_modify_span_with_array(stackdriver_trace_span_t *span, zval *span_options)
 {
     HashTable *ht;
     ulong idx;
     zend_string *k;
     zval *v;
+    ht = Z_ARR_P(span_options);
+
+    ZEND_HASH_FOREACH_KEY_VAL(ht, idx, k, v) {
+        if (strcmp(ZSTR_VAL(k), "labels") == 0) {
+            stackdriver_trace_add_labels_merge(span, v);
+        } else if (strcmp(ZSTR_VAL(k), "startTime") == 0) {
+            span->start = Z_DVAL_P(v);
+        } else if (strcmp(ZSTR_VAL(k), "name") == 0) {
+            span->name = zend_string_copy(Z_STR_P(v));
+        }
+    } ZEND_HASH_FOREACH_END();
+}
+
+static int stackdriver_trace_zend_fcall_closure(zend_execute_data *execute_data, stackdriver_trace_span_t *span, zval *closure TSRMLS_DC)
+{
+    int i, num_args = ZEND_CALL_NUM_ARGS(execute_data);
+    zend_fcall_info fci;
+    zend_fcall_info_cache fcc;
+    zval closure_result, *params[num_args];
+
+    for (i = 0; i < num_args; i++) {
+        params[i] = ZEND_CALL_VAR_NUM(execute_data, i);
+    }
+
+    if (zend_fcall_info_init(
+            closure,
+            0,
+            &fci,
+            &fcc,
+            NULL,
+            NULL
+            TSRMLS_CC
+        ) != SUCCESS) {
+        php_printf("failed to initialize fcall info\n");
+        return FAILURE;
+    };
+
+    fci.retval = &closure_result;
+    fci.params = *params;
+    fci.param_count = num_args;
+    // fci.object = fcc.object = Z_OBJ_P(execute_data->object);
+
+    fcc.initialized = 1;
+    // fcc.called_scope = execute_data->called_scope;
+
+    if (zend_call_function(&fci, &fcc TSRMLS_CC) != SUCCESS) {
+          return FAILURE;
+    }
+
+    stackdriver_trace_modify_span_with_array(span, &closure_result);
+
+    return SUCCESS;
+}
+
+static void stackdriver_trace_execute_callback(stackdriver_trace_span_t *span, zend_execute_data *execute_data, zval *span_options TSRMLS_DC)
+{
     stackdriver_trace_callback cb;
 
     if (Z_TYPE_P(span_options) == IS_PTR) {
         cb = (stackdriver_trace_callback)Z_PTR_P(span_options);
         cb(span, execute_data TSRMLS_CC);
     } else if (Z_TYPE_P(span_options) == IS_ARRAY) {
-        // php_printf("callback is an array");
-        ht = Z_ARR_P(span_options);
-        ZEND_HASH_FOREACH_KEY_VAL(ht, idx, k, v) {
-            if (strcmp(ZSTR_VAL(k), "labels") == 0) {
-                stackdriver_trace_add_labels(span, Z_ARR_P(v));
-            } else if (strcmp(ZSTR_VAL(k), "startTime") == 0) {
-                span->start = Z_DVAL_P(v);
-            } else if (strcmp(ZSTR_VAL(k), "name") == 0) {
-                span->name = Z_STR_P(v);
-            }
-        } ZEND_HASH_FOREACH_END();
+        stackdriver_trace_modify_span_with_array(span, span_options);
+    } else if (Z_TYPE_P(span_options) == IS_OBJECT) {
+        if (Z_OBJCE_P(span_options) == zend_ce_closure) {
+            stackdriver_trace_zend_fcall_closure(execute_data, span, span_options TSRMLS_CC);
+        }
     }
 }
 
@@ -288,7 +362,7 @@ Trace a function call */
 PHP_FUNCTION(stackdriver_trace_function)
 {
     zend_string *function_name;
-    zval *handler;
+    zval *handler, *copy;
 
     if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "S|z", &function_name, &handler) == FAILURE) {
         RETURN_FALSE;
@@ -300,7 +374,10 @@ PHP_FUNCTION(stackdriver_trace_function)
         handler = &h;
     }
 
-    zend_hash_update(STACKDRIVER_G(traced_functions), function_name, handler);
+    PHP_STACKDRIVER_MAKE_STD_ZVAL(copy);
+    ZVAL_ZVAL(copy, handler, 1, 0);
+
+    zend_hash_update(STACKDRIVER_G(traced_functions), function_name, copy);
     RETURN_TRUE;
 }
 
@@ -310,16 +387,48 @@ PHP_FUNCTION(stackdriver_trace_method)
 {
     zend_function *fe;
     zend_string *class_name, *function_name, *key;
-    zval *handler;
+    zval *handler, *copy;
 
     if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "SS|z", &class_name, &function_name, &handler) == FAILURE) {
         RETURN_FALSE;
     }
 
+    if (handler == NULL) {
+        zval h;
+        ZVAL_LONG(&h, 1);
+        handler = &h;
+    }
+
+    PHP_STACKDRIVER_MAKE_STD_ZVAL(copy);
+    ZVAL_ZVAL(copy, handler, 1, 0);
+
     key = stackdriver_generate_class_name(class_name, function_name);
     zend_hash_update(STACKDRIVER_G(traced_functions), key, handler);
 
     RETURN_FALSE;
+}
+
+
+static int stackdriver_labels_to_zval_array(HashTable *ht, zval *label_array)
+{
+    ulong idx;
+    zend_string *k;
+    zval *v;
+    HashTable *label_ht;
+
+    array_init(label_array);
+    label_ht = Z_ARRVAL_P(label_array);
+
+    ZEND_HASH_FOREACH_KEY_VAL(ht, idx, k, v) {
+        if (add_assoc_str(label_array, ZSTR_VAL(k), Z_STR_P(v)) != SUCCESS) {
+            php_prinf("failed to add_assoc_zval\n");
+            return FAILURE;
+        }
+
+        // php_printf("stored\n");
+    } ZEND_HASH_FOREACH_END();
+
+    return SUCCESS;
 }
 
 /* {{{ proto int stackdriver_trace_method()
@@ -329,33 +438,32 @@ PHP_FUNCTION(stackdriver_trace_list)
     int i;
     stackdriver_trace_span_t *trace_span;
     int num_spans = STACKDRIVER_G(span_count);
-    ulong idx;
-    zend_string *k;
-    zval *v;
+    zval labels[num_spans], spans[num_spans];
 
+    // Set up return value to be an array of size num_spans
     array_init(return_value);
 
     for (i = 0; i < num_spans; i++) {
-        zval span;
-        object_init_ex(&span, stackdriver_trace_span_ce);
+        object_init_ex(&spans[i], stackdriver_trace_span_ce);
 
         trace_span = STACKDRIVER_G(spans)[i];
-        zend_update_property_long(stackdriver_trace_span_ce, &span, "spanId", sizeof("spanId") - 1, trace_span->span_id);
+        zend_update_property_long(stackdriver_trace_span_ce, &spans[i], "spanId", sizeof("spanId") - 1, trace_span->span_id);
         if (trace_span->parent) {
-            zend_update_property_long(stackdriver_trace_span_ce, &span, "parentSpanId", sizeof("parentSpanId") - 1, trace_span->parent->span_id);
+            zend_update_property_long(stackdriver_trace_span_ce, &spans[i], "parentSpanId", sizeof("parentSpanId") - 1, trace_span->parent->span_id);
         } else if (STACKDRIVER_G(trace_parent_span_id)) {
-            zend_update_property_long(stackdriver_trace_span_ce, &span, "parentSpanId", sizeof("parentSpanId") - 1, STACKDRIVER_G(trace_parent_span_id));
+            zend_update_property_long(stackdriver_trace_span_ce, &spans[i], "parentSpanId", sizeof("parentSpanId") - 1, STACKDRIVER_G(trace_parent_span_id));
         }
-        zend_update_property_str(stackdriver_trace_span_ce, &span, "name", sizeof("name") - 1, trace_span->name);
-        zend_update_property_double(stackdriver_trace_span_ce, &span, "startTime", sizeof("startTime") - 1, trace_span->start);
-        zend_update_property_double(stackdriver_trace_span_ce, &span, "endTime", sizeof("endTime") - 1, trace_span->stop);
-        if (trace_span->labels) {
-            zval labels;
-            stackdriver_labels_to_zval_array(trace_span->labels, &labels);
-            zend_update_property(stackdriver_trace_span_ce, &span, "labels", sizeof("labels") - 1, &labels);
-        }
+        zend_update_property_str(stackdriver_trace_span_ce, &spans[i], "name", sizeof("name") - 1, trace_span->name);
+        zend_update_property_double(stackdriver_trace_span_ce, &spans[i], "startTime", sizeof("startTime") - 1, trace_span->start);
+        zend_update_property_double(stackdriver_trace_span_ce, &spans[i], "endTime", sizeof("endTime") - 1, trace_span->stop);
 
-        add_next_index_zval(return_value, &span);
+        array_init(&labels[i]);
+        if (trace_span->labels) {
+            stackdriver_labels_to_zval_array(trace_span->labels, &labels[i]);
+        }
+        zend_update_property(stackdriver_trace_span_ce, &spans[i], "labels", sizeof("labels") - 1, &labels[i]);
+
+        add_next_index_zval(return_value, &spans[i]);
     }
 }
 
