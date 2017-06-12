@@ -44,8 +44,11 @@ PHP_RINIT_FUNCTION(stackdriver);
 PHP_RSHUTDOWN_FUNCTION(stackdriver);
 
 ZEND_BEGIN_MODULE_GLOBALS(stackdriver)
-    /* map of functions we're tracing to callbacks */
+    // map of functions we're tracing to callbacks
     HashTable *traced_functions;
+
+    // map of filename -> stackdriver_debugger_snapshot[]
+    HashTable *debugger_snapshots;
 
     // Trace context
     stackdriver_trace_span_t *current_span;

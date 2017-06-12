@@ -14,18 +14,20 @@
  * limitations under the License.
  */
 
-#ifndef PHP_STACKDRIVER_DEBUGGER_H
-#define PHP_STACKDRIVER_DEBUGGER_H 1
+#ifndef PHP_STACKDRIVER_DEBUGGER_SNAPSHOT_H
+#define PHP_STACKDRIVER_DEBUGGER_SNAPSHOT_H 1
 
-#include "stackdriver_debugger_snapshot.h"
+#include "php.h"
 
-// Debugger functions
-PHP_FUNCTION(stackdriver_debugger);
-PHP_FUNCTION(stackdriver_debugger_add_snapshot);
+// extern zend_class_entry* stackdriver_debugger_snapshot_ce;
 
-// Extension lifecycle hooks
-int stackdriver_debugger_minit(INIT_FUNC_ARGS);
-int stackdriver_debugger_rinit(TSRMLS_D);
-int stackdriver_debugger_rshutdown(TSRMLS_D);
+// Snapshot struct
+typedef struct stackdriver_debugger_snapshot_t {
+    zend_string *filename;
+    zend_long lineno;
+    zend_bool fulfilled;
 
-#endif
+    zend_string *condition;
+} stackdriver_debugger_snapshot_t;
+
+#endif /* PHP_STACKDRIVER_DEBUGGER_SNAPSHOT_H */

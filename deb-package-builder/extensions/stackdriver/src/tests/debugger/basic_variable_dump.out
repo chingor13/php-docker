@@ -1,0 +1,4 @@
+current file: /usr/local/google/home/chingor/php/php-docker/deb-package-builder/extensions/stackdriver/src/tests/debugger/basic_variable_dump.php:4
+should set breakpoint at common.php:16
+should debug file.
+Sum is 45
