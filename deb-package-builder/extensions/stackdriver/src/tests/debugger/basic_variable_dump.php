@@ -5,7 +5,7 @@ stackdriver_debugger_add_snapshot('common.php', 16);
 
 require_once(__DIR__ . '/common.php');
 
-$sum = loop(10);
-
-echo "Sum is {$sum}\n";
+// $sum = loop(10);
+//
+// echo "Sum is {$sum}\n";
 ?>
