@@ -3,11 +3,11 @@
 // $foo = 'bar';
 // $asdf = ['qwer', 5, 20.1];
 //
-// function foo($val)
-// {
-//     $x = 1;
-//     return $val;
-// }
+function foo($val) {
+    $x = 1;
+    stackdriver_debugger();
+    return $val;
+}
 
 function loop($times)
 {
@@ -18,7 +18,9 @@ function loop($times)
     return $sum;
 }
 
-stackdriver_debugger();
+loop(3);
+// foo(3);
+// stackdriver_debugger();
 
 // echo 'foo' . PHP_EOL;
 //

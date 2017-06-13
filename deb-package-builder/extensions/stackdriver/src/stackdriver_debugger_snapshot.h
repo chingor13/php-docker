@@ -23,11 +23,23 @@
 
 // Snapshot struct
 typedef struct stackdriver_debugger_snapshot_t {
+    zend_string *id;
     zend_string *filename;
     zend_long lineno;
-    zend_bool fulfilled;
 
     zend_string *condition;
+
+    double createTime;
+    double finalTime;
+
+    zend_bool fulfilled;
+
+    // array of evaluated expressions
+    zval *evaluatedExpressions;
+
+    // array of variables available at this point
+    zval *variableTable;
+
 } stackdriver_debugger_snapshot_t;
 
 #endif /* PHP_STACKDRIVER_DEBUGGER_SNAPSHOT_H */
