@@ -50,6 +50,9 @@ ZEND_BEGIN_MODULE_GLOBALS(stackdriver)
     // map of filename -> stackdriver_debugger_snapshot[]
     HashTable *debugger_snapshots;
 
+    // map of snapshot id -> stackdriver_debugger_snapshot
+    HashTable *debugger_snapshots_by_id;
+
     // Trace context
     stackdriver_trace_span_t *current_span;
     stackdriver_trace_span_t **spans;

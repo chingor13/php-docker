@@ -47,10 +47,10 @@ static void (*original_zend_ast_process)(zend_ast*);
  * walk the syntax tree and free allocated memory. This method cannot leave dangling pointers or
  * the allocated memory may never be freed.
  */
-static zend_ast *stackdriver_debugger_create_debugger_ast(zend_ast *current)
+static zend_ast *stackdriver_debugger_create_debugger_ast(zend_ast *current, stackdriver_debugger_snapshot_t *snapshot)
 {
     zend_ast *newCall;
-    zend_ast_zval *var;
+    zend_ast_zval *var, *snapshotId;
     zend_ast_list *newList, *argList;
 
     var = emalloc(sizeof(zend_ast_zval));
@@ -58,10 +58,16 @@ static zend_ast *stackdriver_debugger_create_debugger_ast(zend_ast *current)
     ZVAL_STRING(&var->val, "stackdriver_debugger");
     var->val.u2.lineno = current->lineno;
 
-    argList = emalloc(sizeof(zend_ast_list));
+    snapshotId = emalloc(sizeof(zend_ast_zval));
+    snapshotId->kind = ZEND_AST_ZVAL;
+    ZVAL_STRING(&snapshotId->val, estrdup(ZSTR_VAL(snapshot->id)));
+    snapshotId->val.u2.lineno = current->lineno;
+
+    argList = emalloc(sizeof(zend_ast_list) + sizeof(zend_ast*));
     argList->kind = ZEND_AST_ARG_LIST;
     argList->lineno = current->lineno;
-    argList->children = 0;
+    argList->children = 1;
+    argList->child[0] = (zend_ast*)snapshotId;
 
     newCall = emalloc(sizeof(zend_ast) + sizeof(zend_ast*));
     newCall->kind = ZEND_AST_CALL;
@@ -88,7 +94,7 @@ static zend_ast *stackdriver_debugger_create_debugger_ast(zend_ast *current)
  * This function returns SUCCESS if we have already injected into the syntax tree.
  * Otherwise, the function returns FAILURE.
  */
-static int stackdriver_debugger_inject(zend_ast *ast, int lineno)
+static int stackdriver_debugger_inject(zend_ast *ast, stackdriver_debugger_snapshot_t *snapshot)
 {
     int i, num_children;
     zend_ast *current;
@@ -101,10 +107,10 @@ static int stackdriver_debugger_inject(zend_ast *ast, int lineno)
 
         for (i = list->children - 1; i >= 0; i--) {
             current = list->child[i];
-            if (current->lineno <= lineno) {
+            if (current->lineno <= snapshot->lineno) {
                 // if not yet injected, inject the debugger code
-                if (stackdriver_debugger_inject(current, lineno) != SUCCESS) {
-                    list->child[i] = stackdriver_debugger_create_debugger_ast(current);
+                if (stackdriver_debugger_inject(current, snapshot) != SUCCESS) {
+                    list->child[i] = stackdriver_debugger_create_debugger_ast(current, snapshot);
                 }
                 return SUCCESS;
             }
@@ -117,7 +123,7 @@ static int stackdriver_debugger_inject(zend_ast *ast, int lineno)
             case ZEND_AST_METHOD:
             case ZEND_AST_CLASS:
                 decl = (zend_ast_decl *)ast;
-                return stackdriver_debugger_inject(decl->child[2], lineno);
+                return stackdriver_debugger_inject(decl->child[2], snapshot);
             case ZEND_AST_ZVAL:
             case ZEND_AST_ZNODE:
                 azval = (zend_ast_zval *)ast;
@@ -130,7 +136,7 @@ static int stackdriver_debugger_inject(zend_ast *ast, int lineno)
         num_children = ast->kind >> ZEND_AST_NUM_CHILDREN_SHIFT;
         if (num_children == 4) {
             // found for or foreach, the 4th child is the body
-            return stackdriver_debugger_inject(ast->child[3], lineno);
+            return stackdriver_debugger_inject(ast->child[3], snapshot);
         }
     }
     return FAILURE;
@@ -147,32 +153,11 @@ static void stackdriver_debugger_ast_process(zend_ast *ast)
 
     zval *debugger_snapshots = zend_hash_find(STACKDRIVER_G(debugger_snapshots), CG(compiled_filename));
     if (debugger_snapshots != NULL) {
-        php_printf("found debugger snapshots! %s\n", ZSTR_VAL(CG(compiled_filename)));
         ht = Z_ARR_P(debugger_snapshots);
 
         ZEND_HASH_FOREACH_PTR(ht, snapshot) {
-            // stackdriver_debugger_inject(ast, snapshot);
-            php_printf("snapshot %p\n", snapshot);
-            dump_zval(_z);
-            if (snapshot->id) {
-                php_printf("snapshot id ptr: %p\n", snapshot->id);
-                php_printf("snapshot id: %s\n", ZSTR_VAL(snapshot->id));
-            }
-            php_printf("snapshot line: %d\n", snapshot->lineno);
-            // php_printf("snapshot id: %s, line: %d\n", snapshot->id, snapshot->lineno);
+            stackdriver_debugger_inject(ast, snapshot);
         } ZEND_HASH_FOREACH_END();
-
-    }
-    char *filename = "/usr/local/google/home/chingor/php/php-docker/deb-package-builder/extensions/stackdriver/src/tests/debugger/common.php";
-    int lineno = 16;
-    int i;
-
-    if (strcmp(ZSTR_VAL(CG(compiled_filename)), filename) == 0) {
-        if (stackdriver_debugger_inject(ast, lineno) == SUCCESS) {
-            // php_printf("injected!!!\n");
-        } else {
-            // php_printf("failed!!!\n");
-        }
     }
 
     // call the original zend_ast_process function if one was set
@@ -183,9 +168,28 @@ static void stackdriver_debugger_ast_process(zend_ast *ast)
 
 PHP_FUNCTION(stackdriver_debugger)
 {
-    zend_string *var_name;
+    zend_string *var_name, *snapshotId = NULL;
     zval *entry, *orig_var;
     zend_array *symbols = zend_rebuild_symbol_table();
+    stackdriver_debugger_snapshot_t *snapshot;
+
+    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "|S", &snapshotId) == FAILURE) {
+        RETURN_FALSE;
+    }
+
+    if (snapshotId != NULL) {
+        php_printf("stackdriver_debugger id: %s\n", ZSTR_VAL(snapshotId));
+        snapshot = zend_hash_find_ptr(STACKDRIVER_G(debugger_snapshots_by_id), snapshotId);
+    }
+
+    if (snapshot) {
+        php_printf("found snapshot: %s, file: %s, line: %d\n", ZSTR_VAL(snapshot->id), ZSTR_VAL(snapshot->filename), snapshot->lineno);
+
+        if (snapshot->fulfilled) {
+            php_printf("snapshot already fulfilled... skipping\n");
+            return;
+        }
+    }
 
     ZEND_HASH_FOREACH_STR_KEY_VAL(symbols, var_name, entry) {
         orig_var = zend_hash_find(symbols, var_name);
@@ -195,6 +199,10 @@ PHP_FUNCTION(stackdriver_debugger)
             // dump_zval(orig_var);
         }
     } ZEND_HASH_FOREACH_END();
+
+    if (snapshot) {
+        snapshot->fulfilled = 1;
+    }
 }
 
 zend_string *stackdriver_debugger_full_filename(zend_string *relative_or_full_path, zend_string *current_file)
@@ -202,15 +210,13 @@ zend_string *stackdriver_debugger_full_filename(zend_string *relative_or_full_pa
     zend_string *basename = php_basename(ZSTR_VAL(current_file), ZSTR_LEN(current_file), NULL, 0);
     size_t dirlen = php_dirname(ZSTR_VAL(current_file), ZSTR_LEN(current_file));
     zend_string *dirname = zend_string_init(ZSTR_VAL(current_file), dirlen, 0);
-    php_printf("basename: %s\n", ZSTR_VAL(basename));
-    php_printf("dirname: %s\n", ZSTR_VAL(dirname));
 
     zend_string *fullname = strpprintf(ZSTR_LEN(dirname) + 2 + ZSTR_LEN(current_file), "%s%c%s", ZSTR_VAL(dirname), DEFAULT_SLASH, ZSTR_VAL(relative_or_full_path));
     zend_string_release(basename);
     zend_string_release(dirname);
 
-    php_printf("Calculate full filename: %s, current: %s\n", ZSTR_VAL(relative_or_full_path), ZSTR_VAL(current_file));
-    php_printf("fullname: %s\n", ZSTR_VAL(fullname));
+    // php_printf("Calculate full filename: %s, current: %s\n", ZSTR_VAL(relative_or_full_path), ZSTR_VAL(current_file));
+    // php_printf("fullname: %s\n", ZSTR_VAL(fullname));
 
     return fullname;
 }
@@ -234,9 +240,7 @@ PHP_FUNCTION(stackdriver_debugger_add_snapshot)
 
     if (snapshot_id == NULL) {
         snapshot->id = strpprintf(20, "%d", php_mt_rand());
-        php_printf("generating snapshot id\n");
     } else {
-        php_printf("provided snapshot id\n");
         snapshot->id = snapshot_id;
     }
     snapshot->filename = full_filename;
@@ -244,6 +248,7 @@ PHP_FUNCTION(stackdriver_debugger_add_snapshot)
     if (condition != NULL) {
         snapshot->condition = condition;
     }
+    snapshot->fulfilled = 0;
 
     ZVAL_PTR(snapshot_ptr, snapshot);
 
@@ -258,6 +263,7 @@ PHP_FUNCTION(stackdriver_debugger_add_snapshot)
     add_next_index_zval(snapshots, snapshot_ptr);
 
     zend_hash_update(STACKDRIVER_G(debugger_snapshots), full_filename, snapshots);
+    zend_hash_update(STACKDRIVER_G(debugger_snapshots_by_id), snapshot->id, snapshot_ptr);
 }
 
 int stackdriver_debugger_minit(INIT_FUNC_ARGS)
@@ -273,6 +279,9 @@ int stackdriver_debugger_rinit(TSRMLS_D)
 {
     ALLOC_HASHTABLE(STACKDRIVER_G(debugger_snapshots));
     zend_hash_init(STACKDRIVER_G(debugger_snapshots), 16, NULL, ZVAL_PTR_DTOR, 0);
+
+    ALLOC_HASHTABLE(STACKDRIVER_G(debugger_snapshots_by_id));
+    zend_hash_init(STACKDRIVER_G(debugger_snapshots_by_id), 16, NULL, ZVAL_PTR_DTOR, 0);
 
     return SUCCESS;
 }

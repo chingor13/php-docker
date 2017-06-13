@@ -1,14 +1,14 @@
 <?php
-
+echo "executing...\n\n\n\n\n";
 // $foo = 'bar';
 // $asdf = ['qwer', 5, 20.1];
 //
 function foo($val) {
     $x = 1;
-    stackdriver_debugger();
+    stackdriver_debugger('123');
     return $val;
 }
-
+//
 function loop($times)
 {
     $sum = 0;
@@ -20,7 +20,7 @@ function loop($times)
 
 loop(3);
 // foo(3);
-// stackdriver_debugger();
+// stackdriver_debugger("1234");
 
 // echo 'foo' . PHP_EOL;
 //
