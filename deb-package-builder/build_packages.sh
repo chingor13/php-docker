@@ -21,7 +21,7 @@ if [ -z "${GOOGLE_PROJECT_ID}" ]; then
 fi
 
 if [ -z "${PHP_VERSIONS}" ]; then
-    PHP_VERSIONS='7.1.5-1,7.0.19-1,5.6.30-3'
+    PHP_VERSIONS='7.1.6-1,7.0.20-1,5.6.30-4'
     echo "Defaulting PHP Versions to: ${PHP_VERSIONS}"
 fi
 
@@ -30,20 +30,11 @@ if [ -z "${BUCKET}" ]; then
     echo "Defaulting Bucket to: ${BUCKET}"
 fi
 
-IMAGE="gcr.io/${GOOGLE_PROJECT_ID}/deb-package-builder"
-
-# First, build the package builder
-if [ -z "${USE_LATEST}" ]; then
-    echo "Building package builder..."
-    gcloud container builds submit . --config=builder.yaml \
-                                     --substitutions _IMAGE=${IMAGE}
-fi
-
 # Use the package builder
 for VERSION in $(echo ${PHP_VERSIONS} | tr "," "\n")
 do
     echo "Building packages for PHP ${VERSION}"
     gcloud container builds submit . --config=build-packages.yaml \
-                                     --substitutions _PHP_VERSION=${VERSION},_IMAGE=${IMAGE},_BUCKET=${BUCKET} \
+                                     --substitutions _PHP_VERSION=${VERSION},_GOOGLE_PROJECT_ID=${GOOGLE_PROJECT_ID},_BUCKET=${BUCKET} \
                                      --timeout=40m
 done

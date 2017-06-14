@@ -17,8 +17,8 @@
 
 namespace Google\Cloud\Runtimes\Builder;
 
+use Google\Cloud\Runtimes\DetectPhpVersion;
 use Symfony\Component\Console\Command\Command;
-use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -27,7 +27,6 @@ use Symfony\Component\Yaml\Yaml;
 class GenFilesCommand extends Command
 {
     const APP_DIR = '/app';
-    const DEFAULT_BASE_IMAGE = 'gcr.io/google-appengine/php-base:latest';
     const DEFAULT_WORKSPACE = '/workspace';
     const DEFAULT_YAML_PATH = 'app.yaml';
     const DEFAULT_FRONT_CONTROLLER_FILE = 'index.php';
@@ -44,15 +43,31 @@ class GenFilesCommand extends Command
     /* @var string */
     private $baseImage;
 
+    /* @var string */
+    private $detectedPhpVersion;
+
     protected function configure()
     {
         $this
             ->setName('create')
             ->setDescription('Create Dockerfile and .dockerignore file')
-            ->addArgument(
-                'base-image',
-                InputArgument::OPTIONAL,
-                'The base image of the Dockerfile'
+            ->addOption(
+                'php71-image',
+                null,
+                InputOption::VALUE_REQUIRED,
+                'The PHP 71 base image of the Dockerfile'
+            )
+            ->addOption(
+                'php70-image',
+                null,
+                InputOption::VALUE_REQUIRED,
+                'The PHP 70 base image of the Dockerfile'
+            )
+            ->addOption(
+                'php56-image',
+                null,
+                InputOption::VALUE_REQUIRED,
+                'The PHP 56 base image of the Dockerfile'
             )
             ->addOption(
                 'workspace',
@@ -64,14 +79,38 @@ class GenFilesCommand extends Command
 
     protected function initialize(InputInterface $input, OutputInterface $output)
     {
-        $loader = new \Twig_Loader_Filesystem(__DIR__ . '/templates');
+        $loader = new \Twig_Loader_Filesystem(__DIR__ . '/../templates');
         $this->twig = new \Twig_Environment($loader);
 
-        $this->baseImage = $input->getArgument('base-image')
-            ?: self::DEFAULT_BASE_IMAGE;
         $this->workspace = $input->getOption('workspace')
             ?: getenv('PWD')
             ?: self::DEFAULT_WORKSPACE;
+        $version = DetectPhpVersion::determinePhpVersionFromComposer(
+            $this->workspace . '/composer.json'
+        );
+        if ($version === DetectPhpVersion::NO_PHP_CONSTRAINT_FOUND
+            || $version === DetectPhpVersion::NO_MATCHED_VERSION_FOUND) {
+            $output->writeln("<info>
+There is no PHP runtime version specified in composer.json, or
+we don't support the version you specified. Google App Engine
+uses the latest 7.1.x version.
+We recommend pinning your PHP version by running:
+
+composer require php 7.1.* (replace it with your desired minor version)
+
+Using PHP version 7.1.x...</info>
+");
+        }
+        if (substr($version, 0, 3) === '5.6') {
+            $this->baseImage = $input->getOption('php56-image');
+            $this->detectedPhpVersion = '5.6';
+        } elseif (substr($version, 0, 3) === '7.0') {
+            $this->baseImage = $input->getOption('php70-image');
+            $this->detectedPhpVersion = '7.0';
+        } else {
+            $this->baseImage = $input->getOption('php71-image');
+            $this->detectedPhpVersion = '7.1';
+        }
         $yamlPath = getenv('GAE_APPLICATION_YAML_PATH')
             ?: self::DEFAULT_YAML_PATH;
         if (file_exists($this->workspace . '/' . $yamlPath)) {
@@ -99,22 +138,45 @@ class GenFilesCommand extends Command
         if (!is_array($this->appYaml) || !array_key_exists('runtime_config', $this->appYaml)) {
             return $ret;
         }
-        $runtime_config = $this->appYaml['runtime_config'];
-
-        // TODO: Generalize this process
-        if (array_key_exists('whitelist_functions', $runtime_config)) {
-            $ret['WHITELIST_FUNCTIONS'] =
-                $runtime_config['whitelist_functions'];
+        $runtimeConfig = $this->appYaml['runtime_config'];
+        $envVariables = array_key_exists('env_variables', $this->appYaml)
+            ? $this->appYaml['env_variables']
+            : [];
+        $maps = [
+            'document_root' => 'DOCUMENT_ROOT',
+            'whitelist_functions' => 'WHITELIST_FUNCTIONS',
+            'front_controller_file' => 'FRONT_CONTROLLER_FILE',
+            'nginx_conf_http_include' => 'NGINX_CONF_HTTP_INCLUDE',
+            'nginx_conf_include' => 'NGINX_CONF_INCLUDE',
+            'nginx_conf_override' => 'NGINX_CONF_OVERRIDE',
+            'php_fpm_conf_override' => 'PHP_FPM_CONF_OVERRIDE',
+            'php_ini_override' => 'PHP_INI_OVERRIDE',
+            'supervisord_conf_addition' => 'SUPERVISORD_CONF_ADDITION',
+            'supervisord_conf_override' => 'SUPERVISORD_CONF_OVERRIDE'
+        ];
+        $errorKeys = [];
+        foreach ($maps as $k => $v) {
+            if (array_key_exists($k, $runtimeConfig)
+                && !empty($runtimeConfig[$k])) {
+                // Fail if we find the corresponding values in env_variables.
+                if (array_key_exists($v, $envVariables)) {
+                    $errorKeys[] = $v;
+                }
+                if ($v === 'DOCUMENT_ROOT') {
+                    // Add ${APP_DIR} for making it a full path.
+                    $ret[$v] = self::APP_DIR . '/' . $runtimeConfig[$k];
+                } else {
+                    $ret[$v] = $runtimeConfig[$k];
+                }
+            }
         }
-        if (array_key_exists('front_controller_file', $runtime_config)
-            && !empty($runtime_config['front_controller_file'])) {
-            $ret['FRONT_CONTROLLER_FILE'] =
-                $runtime_config['front_controller_file'];
-        }
-        if (array_key_exists('document_root', $runtime_config)
-            && !empty($runtime_config['document_root'])) {
-            $ret['DOCUMENT_ROOT'] =
-                self::APP_DIR . '/' . $runtime_config['document_root'];
+        if (count($errorKeys) > 0) {
+            throw new \RuntimeException(
+                "There are values defined on both 'env_variables' and "
+                . "'runtime_config'. Remove the following keys in "
+                . "'env_variables': "
+                . implode(" ", $errorKeys)
+            );
         }
         return $ret;
     }
@@ -122,15 +184,12 @@ class GenFilesCommand extends Command
     /**
      * Creates a Dockerfile if it doesn't exist in the workspace.
      */
-    public function createDockerfile($baseImage = '')
+    public function createDockerfile($baseImage)
     {
         if (file_exists($this->workspace . '/Dockerfile')) {
             echo 'not creating Dockerfile because the file already exists'
                 . PHP_EOL;
             return;
-        }
-        if (empty($baseImage)) {
-            $baseImage = self::DEFAULT_BASE_IMAGE;
         }
 
         $envs = $this->envsFromRuntimeConfig()
@@ -138,7 +197,8 @@ class GenFilesCommand extends Command
             + [
                 'DOCUMENT_ROOT' => self::APP_DIR,
                 'FRONT_CONTROLLER_FILE' => self::DEFAULT_FRONT_CONTROLLER_FILE,
-                'GOOGLE_RUNTIME_RUN_COMPOSER_SCRIPT' => 'true'
+                'GOOGLE_RUNTIME_RUN_COMPOSER_SCRIPT' => 'true',
+                'DETECTED_PHP_VERSION' => $this->detectedPhpVersion
             ];
         $envString = 'ENV ';
         foreach ($envs as $key => $value) {

@@ -53,9 +53,6 @@ ENV NGINX_DIR=/etc/nginx \
     NGINX_USER_CONF_DIR=/etc/nginx/conf.d \
     UPLOAD_DIR=/upload \
     SESSION_SAVE_PATH=/tmp/sessions \
-    PHP56_VERSION=5.6.30 \
-    PHP70_VERSION=7.0.19 \
-    PHP71_VERSION=7.1.5 \
     PATH=/opt/php/bin:$PATH \
     WWW_HOME=/var/www \
     COMPOSER_HOME=/opt/composer \
@@ -64,6 +61,7 @@ ENV NGINX_DIR=/etc/nginx \
 
 # Install build scripts - composer, nginx, php
 COPY build-scripts /build-scripts
+RUN chown www-data /build-scripts
 
 ARG RUNTIME_DISTRIBUTION="gcp-php-runtime-jessie"
 
@@ -75,6 +73,7 @@ RUN (echo "deb http://packages.cloud.google.com/apt ${RUNTIME_DISTRIBUTION} main
     (curl https://packages.cloud.google.com/apt/doc/apt-key.gpg \
       | apt-key add -) && \
     apt-get -y update && \
+    /bin/bash /build-scripts/dump_php_versions.sh && \
     /bin/bash /build-scripts/install_nginx.sh
 
 EXPOSE 8080
@@ -93,15 +92,9 @@ RUN mkdir -p $APP_DIR $UPLOAD_DIR $SESSION_SAVE_PATH \
 COPY nginx.conf fastcgi_params gzip_params "${NGINX_DIR}/"
 COPY nginx-app.conf nginx-http.conf "${NGINX_USER_CONF_DIR}/"
 COPY supervisord.conf /etc/supervisor/supervisord.conf
-COPY entrypoint.sh composer.sh whitelist_functions.php /
 
-RUN chgrp www-data composer.sh && \
-    chmod +x /entrypoint.sh /composer.sh
-
-# A script for extracting PHP version from composer.json.
-COPY detect_php_version.php install_extensions.php /tmp/
+RUN chmod +x /build-scripts/entrypoint.sh /build-scripts/composer.sh
 
 WORKDIR $APP_DIR
 
-ENTRYPOINT ["/entrypoint.sh"]
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf"]

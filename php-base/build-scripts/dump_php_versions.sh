@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # Copyright 2017 Google Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,15 +14,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Dockerfile for App Engine Flexible environment for PHP
 
-FROM {{ base_image }}
+# A shell script for dumping php versions to files.
+set -xe
 
-{{ env_string }}
+PHP_SHORT_NAMES=(php56 php70 php71)
 
-COPY . $APP_DIR
-RUN chown -R www-data.www-data $APP_DIR
-RUN /build-scripts/composer.sh
-
-RUN /bin/bash /build-scripts/move-config-files.sh
-RUN /bin/bash /build-scripts/lockdown.sh
+for PHP_SHORT_NAME in "${PHP_SHORT_NAMES[@]}"
+do
+    apt-cache show gcp-${PHP_SHORT_NAME}|grep Version \
+        |grep  -o -P "(\\d+\\.\\d+\\.\\d+)" > "/opt/${PHP_SHORT_NAME}_version"
+done
