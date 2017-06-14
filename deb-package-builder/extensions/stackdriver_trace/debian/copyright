@@ -1,5 +1,5 @@
 Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: stackdriver
+Upstream-Name: stackdriver-trace
 Upstream-Contact: Jeff Ching <chingor@google.com>
 Source: https://github.com/GoogleCloudPlatform/php-docker
 
