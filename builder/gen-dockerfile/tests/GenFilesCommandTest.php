@@ -186,6 +186,17 @@ class GenFilesCommandTest extends \PHPUnit_Framework_TestCase
                 ]
             ],
             [
+                // User must specify document_root
+                __DIR__ . '/test_data/no_docroot',
+                null,
+                '',
+                '/app',
+                'added by the php runtime builder',
+                'gcr.io/google-appengine/php71:latest',
+                [],
+                '\\Google\\Cloud\\Runtimes\\Builder\\Exception\\MissingDocumentRootException'
+            ],
+            [
                 // Values in both places will throw an exception.
                 __DIR__ . '/test_data/values_on_both',
                 null,
@@ -204,7 +215,7 @@ class GenFilesCommandTest extends \PHPUnit_Framework_TestCase
                     "SUPERVISORD_CONF_ADDITION=files/additional-supervisord.conf",
                     "SUPERVISORD_CONF_OVERRIDE=files/supervisord.conf"
                 ],
-                '\\RuntimeException'
+                '\\Google\\Cloud\\Runtimes\\Builder\\Exception\\EnvConflictException'
             ],
             [
                 // front_controller_file
@@ -265,7 +276,7 @@ class GenFilesCommandTest extends \PHPUnit_Framework_TestCase
                 'added by the php runtime builder',
                 'gcr.io/google-appengine/php71:latest',
                 [],
-                '\\RuntimeException'
+                '\\Google\\Cloud\\Runtimes\\Builder\\Exception\\EnvConflictException'
             ],
             [
                 // Has files already
@@ -276,6 +287,17 @@ class GenFilesCommandTest extends \PHPUnit_Framework_TestCase
                 'User defined .dockerignore',
                 'gcr.io/google_appengine/debian'
             ],
+            [
+                // Exact PHP version is specified
+                __DIR__ . '/test_data/exact_php_version',
+                null,
+                '',
+                '/app',
+                'added by the php runtime builder',
+                'gcr.io/google-appengine/php56:latest',
+                [],
+                '\\Google\\Cloud\\Runtimes\\Builder\\Exception\\ExactVersionException'
+            ]
         ];
     }
 }
