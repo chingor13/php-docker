@@ -33,10 +33,13 @@ fi
 
 export PHP_BASE_IMAGE="gcr.io/google-appengine/php-base"
 export BASE_IMAGE="gcr.io/google-appengine/php"
+export PHP_56_IMAGE="gcr.io/google-appengine/php56"
 
 for TEMPLATE in `find . -name Dockerfile.in`
 do
-  envsubst '${BASE_IMAGE} ${PHP_BASE_IMAGE}' < ${TEMPLATE} > $(dirname ${TEMPLATE})/$(basename -s .in ${TEMPLATE})
+    envsubst '${BASE_IMAGE} ${PHP_BASE_IMAGE} ${PHP_56_IMAGE}' \
+             < ${TEMPLATE} \
+             > $(dirname ${TEMPLATE})/$(basename -s .in ${TEMPLATE})
 done
 
 if [ -z "${E2E_PROJECT_ID}" ]
@@ -48,4 +51,4 @@ fi
 gcloud container builds submit . \
   --config integration-tests.yaml \
   --timeout 3600 \
-  --substitutions _GOOGLE_PROJECT_ID=$GOOGLE_PROJECT_ID,_TAG=$TAG,_SERVICE_ACCOUNT_JSON=$SERVICE_ACCOUNT_JSON,_E2E_PROJECT_ID=$E2E_PROJECT_ID,_RUNTIME_BUILDER_ROOT=
+  --substitutions _GOOGLE_PROJECT_ID=$GOOGLE_PROJECT_ID,_TAG=$TAG,_SERVICE_ACCOUNT_JSON=$SERVICE_ACCOUNT_JSON,_E2E_PROJECT_ID=$E2E_PROJECT_ID,_TEST_VM_IMAGE=${TEST_VM_IMAGE},_RUNTIME_BUILDER_ROOT=

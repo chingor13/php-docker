@@ -16,8 +16,16 @@
 
 FROM {{ base_image }}
 
-{{ env_string }}
+{{ env_string|raw }}
+
+ARG BUILDER_PROJECT_ID
+ENV GCLOUD_PROJECT ${BUILDER_PROJECT_ID}
 
 COPY . $APP_DIR
 RUN chown -R www-data.www-data $APP_DIR
-RUN /composer.sh
+RUN /build-scripts/composer.sh
+
+RUN /bin/bash /build-scripts/move-config-files.sh
+RUN /bin/bash /build-scripts/lockdown.sh
+
+{{ enable_stackdriver_cmd }}

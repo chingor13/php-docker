@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-require_once(__DIR__ . "/../detect_php_version.php");
+require_once(__DIR__ . "/../build-scripts/detect_php_version.php");
 
 class DetectPhpVersionTest extends \PHPUnit_Framework_TestCase
 {
@@ -44,5 +44,29 @@ class DetectPhpVersionTest extends \PHPUnit_Framework_TestCase
     {
         $version = DetectPhpVersion::version('7.1.100', self::AVAILABLE_VERSIONS);
         $this->assertEquals('', $version);
+    }
+
+    /**
+     * @expectedException \ExactVersionException
+     */
+    public function testExactVersion()
+    {
+        $version = DetectPhpVersion::versionFromComposer(__DIR__ . '/samples/exact.json', self::AVAILABLE_VERSIONS);
+    }
+
+    /**
+     * @expectedException \NoSpecifiedVersionException
+     */
+    public function testNoVersionString()
+    {
+        $version = DetectPhpVersion::versionFromComposer(__DIR__ . '/samples/no_version.json', self::AVAILABLE_VERSIONS);
+    }
+
+    /**
+     * @expectedException \InvalidVersionException
+     */
+    public function testInvalidVersion()
+    {
+        $version = DetectPhpVersion::versionFromComposer(__DIR__ . '/samples/invalid.json', self::AVAILABLE_VERSIONS);
     }
 }

@@ -27,11 +27,14 @@ apt-get install -y \
         gcp-php71-event \
         gcp-php71-grpc \
         gcp-php71-imagick \
+        gcp-php71-libsodium \
         gcp-php71-mailparse \
         gcp-php71-memcached \
         gcp-php71-mongodb \
         gcp-php71-oauth \
+        gcp-php71-opencensus \
         gcp-php71-pq \
+        gcp-php71-protobuf \
         gcp-php71-rdkafka \
         gcp-php71-redis \
         --no-install-recommends
@@ -40,6 +43,7 @@ apt-get install -y \
 ln -s ${PHP71_DIR}/bin/php71-enmod ${PHP71_DIR}/bin/php-enmod
 ln -s ${PHP71_DIR}/bin/php71-dismod  ${PHP71_DIR}/bin/php-dismod
 ${PHP71_DIR}/bin/php71-enmod apcu-bc
+${PHP71_DIR}/bin/php71-enmod sodium
 ${PHP71_DIR}/bin/php71-enmod mailparse
 ${PHP71_DIR}/bin/php71-enmod memcached
 

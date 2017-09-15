@@ -27,12 +27,15 @@ apt-get install -y \
         gcp-php70-event \
         gcp-php70-grpc \
         gcp-php70-imagick \
+        gcp-php70-libsodium \
         gcp-php70-mailparse \
         gcp-php70-memcached \
         gcp-php70-mongodb \
         gcp-php70-oauth \
+        gcp-php70-opencensus \
         gcp-php70-phalcon \
         gcp-php70-pq \
+        gcp-php70-protobuf \
         gcp-php70-rdkafka \
         gcp-php70-redis \
         --no-install-recommends
@@ -41,6 +44,7 @@ apt-get install -y \
 ln -s ${PHP70_DIR}/bin/php70-enmod ${PHP70_DIR}/bin/php-enmod
 ln -s ${PHP70_DIR}/bin/php70-dismod ${PHP70_DIR}/bin/php-dismod
 ${PHP70_DIR}/bin/php70-enmod apcu-bc
+${PHP70_DIR}/bin/php70-enmod sodium
 ${PHP70_DIR}/bin/php70-enmod mailparse
 ${PHP70_DIR}/bin/php70-enmod memcached
 

@@ -88,6 +88,21 @@ class EndToEndTest extends \PHPUnit_Framework_TestCase
 
     public static function deploy($project_id, $e2e_test_version)
     {
+        // Now it's appending a whole `beta_settings` section because the
+        // app.yaml doesn't have it. Apparently it's cleaner if we read the
+        // yaml file and add the config by yaml library.
+        $testVmImage = getenv('TEST_VM_IMAGE');
+        if (! empty($testVmImage)) {
+            $betaSettings = "beta_settings:\n"
+                . "  image: $testVmImage\n";
+            file_put_contents(
+                '../app.yaml',
+                $betaSettings,
+                FILE_APPEND | LOCK_EX
+            );
+        }
+        echo 'Deploying with the following app.yaml' . PHP_EOL;
+        echo file_get_contents('../app.yaml');
         $command = "gcloud -q beta app deploy --version $e2e_test_version"
             . " --project $project_id --no-promote"
             . ' ../app.yaml';
@@ -139,6 +154,7 @@ class EndToEndTest extends \PHPUnit_Framework_TestCase
     public function setUp()
     {
         $this->eventuallyConsistentRetryCount = 10;
+        $this->catchAllExceptions = true;
 
         $url = sprintf('https://%s-dot-%s.appspot.com/',
                        getenv(self::VERSION_ENV),
@@ -180,6 +196,68 @@ class EndToEndTest extends \PHPUnit_Framework_TestCase
             $this->assertContains('Goodbye World',
                                   $resp->getBody()->getContents());
         });
+    }
+
+    public function testExtensionIni()
+    {
+        // grpc, opencensus, pdo_sqlite should be in the extensions.ini file.
+        // Others should not be there.
+        $this->runEventuallyConsistentTest(function () {
+            $extMap = [
+                'grpc' => true,
+                'opencensus' => true,
+                'pdo_sqlite' => true,
+                'mailparse' => false,
+                'mbstring' => false
+            ];
+            // Read the extension.ini file
+            $query = http_build_query(
+                ['f' => '/opt/php/lib/conf.d/extensions.ini']
+            );
+            $resp = $this->client->get('readfile.php?' . $query);
+            $this->assertEquals('200', $resp->getStatusCode(),
+                                'readfile.php status code');
+            $body = $resp->getBody()->getContents();
+            foreach ($extMap as $ext => $shouldBeInIni) {
+                if ($shouldBeInIni) {
+                    $this->assertContains(
+                        $ext,
+                        $body,
+                        "$ext should be in extensions.ini file"
+                    );
+                } else {
+                    $this->assertNotContains(
+                        $ext,
+                        $body,
+                        "$ext should not be in extensions.ini file"
+                    );
+                }
+            }
+        });
+    }
+
+    /**
+     * @dataProvider extensions
+     */
+    public function testExtensions($extensionName)
+    {
+        $this->runEventuallyConsistentTest(function () use ($extensionName) {
+            $query = http_build_query(['ext' => $extensionName]);
+            $resp = $this->client->get('/check_extensions.php?' . $query);
+            $this->assertEquals('200', $resp->getStatusCode(),
+                                "failed to confirm $extensionName is loaded");
+        });
+    }
+
+    public function extensions()
+    {
+        return [
+            ['grpc'],
+            ['opencensus'],
+            ['mailparse'],
+            ['mbstring'],
+            ['pdo_sqlite'],
+        ];
     }
 
     public function testPhpInfo()

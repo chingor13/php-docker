@@ -26,9 +26,10 @@ fi
 
 export BUILD_DIR
 export ARTIFACT_DIR='/workspace/pkg'
+export ARTIFACT_LIB_DIR="${ARTIFACT_DIR}/libraries"
 export DEB_BUILDER_DIR='/workspace'
 
-mkdir -p ${BUILD_DIR} ${ARTIFACT_DIR}
+mkdir -p ${BUILD_DIR} ${ARTIFACT_LIB_DIR}
 
 # Remove everything and start fresh
 rm -rf ${BUILD_DIR}/*
@@ -40,7 +41,12 @@ PHP_VERSIONS=${1}
 EXTENSIONS=${2}
 if [ -z "$EXTENSIONS" ]; then
     # Explicitly declaring because some extenions depend on others (pq depends on raphf)
-    EXTENSIONS="apcu,apcu_bc,ev,event,grpc,imagick,jsonc,mailparse,memcache,memcached,mongodb,oauth,phalcon,raphf,pq,rdkafka,redis,suhosin,libuv,cassandra-cpp-driver,cassandra"
+    EXTENSIONS="amqp,apcu,apcu_bc,apm,cassandra,couchbase,ds,eio,ev,event,grpc,hprose,imagick,jsonc,jsond,krb5,libsodium,lua,lzf,mailparse,memcache,memcached,memprof,mongodb,oauth,opencensus,phalcon,protobuf,raphf,pq,rdkafka,redis,seaslog,stackdriver_trace,stomp,suhosin,swoole,sync,tcpwrap,timezonedb,v8js,vips,yaconf,yaf,yaml"
+fi
+
+LIBRARIES=${3}
+if [ -z "$LIBRARIES" ]; then
+    LIBRARIES="libuv,cassandra-cpp-driver,libsodium,libv8,libvips"
 fi
 
 
@@ -58,21 +64,38 @@ build_php_version()
     export SHORT_VERSION=$(echo ${BASE_VERSION} | tr -d ".")
     export PACKAGE_NAME="gcp-php${SHORT_VERSION}"
     PHP_PACKAGE="gcp-php${SHORT_VERSION}_${FULL_VERSION}_amd64.deb"
+    export ARTIFACT_PKG_DIR="${ARTIFACT_DIR}/${FULL_VERSION}"
+    mkdir -p ${ARTIFACT_PKG_DIR}
 
-    if [ -e "${ARTIFACT_DIR}/${PHP_PACKAGE}" ]; then
+    ls -l ${ARTIFACT_PKG_DIR}
+
+    if [ -e "${ARTIFACT_PKG_DIR}/${PHP_PACKAGE}" ]; then
         echo "$PHP_PACKAGE already exists, skipping"
     else
       echo "Building ${PACKAGE_NAME} version ${FULL_VERSION}"
-      curl -sL "https://php.net/get/php-${PHP_VERSION}.tar.gz/from/this/mirror" \
-          > php-${PHP_VERSION}.tar.gz
-      curl -sL \
-          "https://php.net/get/php-${PHP_VERSION}.tar.gz.asc/from/this/mirror" \
+
+      if [[ "${PHP_VERSION}" == *"alpha"* ]] || [[ "${PHP_VERSION}" == *"RC"* ]] ; then
+          curl -sL "https://downloads.php.net/~remi/php-${PHP_VERSION}.tar.gz" \
+              > php-${PHP_VERSION}.tar.gz
+          curl -sL "https://downloads.php.net/~remi/php-${PHP_VERSION}.tar.gz.asc" \
               > php-${PHP_VERSION}.tar.gz.asc
+      elif [[ "${PHP_VERSION}" == *"beta"* ]]; then
+          curl -sL "https://downloads.php.net/~pollita/php-${PHP_VERSION}.tar.gz" \
+              > php-${PHP_VERSION}.tar.gz
+          curl -sL "https://downloads.php.net/~pollita/php-${PHP_VERSION}.tar.gz.asc" \
+              > php-${PHP_VERSION}.tar.gz.asc
+      else
+          curl -sL "https://php.net/get/php-${PHP_VERSION}.tar.gz/from/this/mirror" \
+              > php-${PHP_VERSION}.tar.gz
+          curl -sL "https://php.net/get/php-${PHP_VERSION}.tar.gz.asc/from/this/mirror" \
+              > php-${PHP_VERSION}.tar.gz.asc
+      fi
       cat ${DEB_BUILDER_DIR}/gpgkeys/php${SHORT_VERSION}/* | gpg --dearmor \
           > ${DEB_BUILDER_DIR}/gpgkeys/php${SHORT_VERSION}.gpg
       gpg --no-default-keyring --keyring \
           ${DEB_BUILDER_DIR}/gpgkeys/php${SHORT_VERSION}.gpg \
           --verify php-${PHP_VERSION}.tar.gz.asc
+
       rm php-${PHP_VERSION}.tar.gz.asc
       mv php-${PHP_VERSION}.tar.gz \
           ${PACKAGE_NAME}_${PHP_VERSION}.orig.tar.gz
@@ -114,8 +137,14 @@ build_php_version()
       dpkg-buildpackage -us -uc -j"$(nproc)"
       popd
 
-      cp $PHP_PACKAGE $ARTIFACT_DIR
+      cp $PHP_PACKAGE $ARTIFACT_PKG_DIR
     fi
+}
+
+build_library()
+{
+    echo "Building $1 library..."
+    ${DEB_BUILDER_DIR}/libraries/$1/build.sh
 }
 
 build_php_extension()
@@ -124,11 +153,15 @@ build_php_extension()
     ${DEB_BUILDER_DIR}/extensions/$1/build.sh
 }
 
+for LIBRARY in $(echo ${LIBRARIES} | tr "," "\n"); do
+    build_library $LIBRARY
+done
+
 for VERSION in $(echo ${PHP_VERSIONS} | tr "," "\n"); do
     build_php_version $VERSION
 
     # install the php package
-    dpkg -i "$ARTIFACT_DIR/$PHP_PACKAGE"
+    dpkg -i "$ARTIFACT_PKG_DIR/$PHP_PACKAGE"
     # Make it a default
     rm -rf ${PHP_DIR}
     ln -sf /opt/php${SHORT_VERSION} ${PHP_DIR}

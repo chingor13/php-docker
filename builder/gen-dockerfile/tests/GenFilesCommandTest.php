@@ -22,6 +22,14 @@ class GenFilesCommandTest extends \PHPUnit_Framework_TestCase
 {
     public static $testDir;
 
+    public static $files = [
+            'app.yaml',
+            'my.yaml',
+            'Dockerfile',
+            '.dockerignore',
+            'composer.json'
+    ];
+
     public static function setUpBeforeClass()
     {
         self::$testDir = tempnam(sys_get_temp_dir(), 'GenFilesTest');
@@ -44,8 +52,7 @@ class GenFilesCommandTest extends \PHPUnit_Framework_TestCase
 
     public function tearDown()
     {
-        $files = array('app.yaml', 'my.yaml', 'Dockerfile', '.dockerignore');
-        foreach ($files as $file) {
+        foreach (self::$files as $file) {
             if (file_exists(self::$testDir . '/' . $file)) {
                 unlink(self::$testDir . '/' . $file);
             }
@@ -57,16 +64,27 @@ class GenFilesCommandTest extends \PHPUnit_Framework_TestCase
      */
     public function testGenFilesCommand(
         $dir,
-        $baseImage,
+        $baseImages,
         $appYamlEnv,
         $expectedDocRoot,
         $expectedDockerIgnore,
         $expectedFrom,
-        $otherExpectations = []
+        $otherExpectations = [],
+        $expectedException = null
     ) {
+        if ($baseImages === null) {
+            $baseImages =
+                [
+                    '--php56-image' => 'gcr.io/google-appengine/php56:latest',
+                    '--php70-image' => 'gcr.io/google-appengine/php70:latest',
+                    '--php71-image' => 'gcr.io/google-appengine/php71:latest',
+                ];
+        }
+        if ($expectedException !== null) {
+            $this->setExpectedExceptionRegExp($expectedException);
+        }
         // Copy all the files to the test dir
-        $files = array('app.yaml', 'my.yaml', 'Dockerfile', '.dockerignore');
-        foreach ($files as $file) {
+        foreach (self::$files as $file) {
             if (file_exists($dir . '/' . $file)) {
                 copy($dir . '/' . $file, self::$testDir . '/' . $file);
             }
@@ -76,15 +94,14 @@ class GenFilesCommandTest extends \PHPUnit_Framework_TestCase
         }
         $genFiles = new GenFilesCommand();
         $commandTester = new CommandTester($genFiles);
-        $commandTester->execute([
-            'base-image' => $baseImage,
+        $commandTester->execute($baseImages + [
             '--workspace' => self::$testDir
         ]);
 
         $dockerfile = file_get_contents(self::$testDir . '/Dockerfile');
         $this->assertTrue($dockerfile !== false, 'Dockerfile should exist');
         $this->assertContains(
-            'DOCUMENT_ROOT=' . $expectedDocRoot,
+            "DOCUMENT_ROOT='$expectedDocRoot'",
             $dockerfile
         );
         $this->assertContains('FROM ' . $expectedFrom, $dockerfile);
@@ -112,109 +129,271 @@ class GenFilesCommandTest extends \PHPUnit_Framework_TestCase
             [
                 // Simplest case
                 __DIR__ . '/test_data/simplest',
-                '',
+                null,
                 '',
                 '/app',
                 'added by the php runtime builder',
-                'gcr.io/google-appengine/php-base:latest',
-                ["GOOGLE_RUNTIME_RUN_COMPOSER_SCRIPT=true \n",
-                 "FRONT_CONTROLLER_FILE=index.php \\\n"
+                'gcr.io/google-appengine/php71:latest',
+                ["COMPOSER_FLAGS='--no-dev --prefer-dist' \\\n",
+                 "FRONT_CONTROLLER_FILE='index.php' \\\n",
+                 "DETECTED_PHP_VERSION='7.1' \n"
                 ]
             ],
             [
-                // whitelist_functions
-                __DIR__ . '/test_data/whitelist_functions',
+                // Removed env var
+                __DIR__ . '/test_data/removed_env_var',
+                null,
                 '',
                 '',
-                '/app',
-                'added by the php runtime builder',
-                'gcr.io/google-appengine/php-base:latest',
-                ["WHITELIST_FUNCTIONS=exec \\\n"]
+                '',
+                '',
+                [],
+                '\\Google\\Cloud\\Runtimes\\Builder\\Exception\\RemovedEnvVarException'
             ],
             [
-                // whitelist_functions on env_variables
-                __DIR__ . '/test_data/whitelist_functions_on_env',
+                // stackdriver simple case
+                __DIR__ . '/test_data/stackdriver_simple',
+                null,
                 '',
-                '',
-                '/app',
+                '/app/web',
                 'added by the php runtime builder',
-                'gcr.io/google-appengine/php-base:latest',
-                ["WHITELIST_FUNCTIONS=exec \\\n"]
+                'gcr.io/google-appengine/php71:latest',
+                ["COMPOSER_FLAGS='--no-dev --prefer-dist' \\\n",
+                 "FRONT_CONTROLLER_FILE='index.php' \\\n",
+                 "DETECTED_PHP_VERSION='7.1' \\\n",
+                 "IS_BATCH_DAEMON_RUNNING='true' \n",
+                 "enable_stackdriver_integration.sh"
+                ]
             ],
             [
-                // whitelist_functions runtime_config wins
-                __DIR__ . '/test_data/whitelist_functions_on_both',
+                // stackdriver individual packages
+                __DIR__ . '/test_data/stackdriver_individual',
+                null,
                 '',
+                '/app/web',
+                'added by the php runtime builder',
+                'gcr.io/google-appengine/php71:latest',
+                ["COMPOSER_FLAGS='--no-dev --prefer-dist' \\\n",
+                 "FRONT_CONTROLLER_FILE='index.php' \\\n",
+                 "DETECTED_PHP_VERSION='7.1' \\\n",
+                 "IS_BATCH_DAEMON_RUNNING='true' \n",
+                 "enable_stackdriver_integration.sh --individual"
+                ]
+            ],
+            [
+                // stackdriver old logging
+                __DIR__ . '/test_data/stackdriver_old_logging',
+                null,
+                '',
+                '/app/web',
+                'added by the php runtime builder',
+                'gcr.io/google-appengine/php71:latest',
+                [],
+                '\\Google\\Cloud\\Runtimes\\Builder\\Exception\\GoogleCloudVersionException'
+            ],
+            [
+                // stackdriver old error_reporting
+                __DIR__ . '/test_data/stackdriver_old_er',
+                null,
+                '',
+                '/app/web',
+                'added by the php runtime builder',
+                'gcr.io/google-appengine/php71:latest',
+                [],
+                '\\Google\\Cloud\\Runtimes\\Builder\\Exception\\GoogleCloudVersionException'
+            ],
+            [
+                // stackdriver no composer.json
+                __DIR__ . '/test_data/stackdriver_no_composer',
+                null,
+                '',
+                '/app/web',
+                'added by the php runtime builder',
+                'gcr.io/google-appengine/php71:latest',
+                [],
+                '\\Google\\Cloud\\Runtimes\\Builder\\Exception\\GoogleCloudVersionException'
+            ],
+            [
+                // stackdriver no google/cloud
+                __DIR__ . '/test_data/stackdriver_no_google_cloud',
+                null,
+                '',
+                '/app/web',
+                'added by the php runtime builder',
+                'gcr.io/google-appengine/php71:latest',
+                [],
+                '\\Google\\Cloud\\Runtimes\\Builder\\Exception\\GoogleCloudVersionException'
+            ],
+            [
+                // stackdriver old google/cloud
+                __DIR__ . '/test_data/stackdriver_old_google_cloud',
+                null,
+                '',
+                '/app/web',
+                'added by the php runtime builder',
+                'gcr.io/google-appengine/php71:latest',
+                [],
+                '\\Google\\Cloud\\Runtimes\\Builder\\Exception\\GoogleCloudVersionException'
+            ],
+            [
+                // PHP 5.6
+                __DIR__ . '/test_data/php56',
+                null,
                 '',
                 '/app',
                 'added by the php runtime builder',
-                'gcr.io/google-appengine/php-base:latest',
-                ["WHITELIST_FUNCTIONS=exec \\\n"]
+                'gcr.io/google-appengine/php56:latest',
+                ["COMPOSER_FLAGS='--no-dev --prefer-dist' \\\n",
+                 "FRONT_CONTROLLER_FILE='index.php' \\\n",
+                 "DETECTED_PHP_VERSION='5.6' \n"
+                ]
+            ],
+            [
+                // PHP 7.0
+                __DIR__ . '/test_data/php70',
+                null,
+                '',
+                '/app',
+                'added by the php runtime builder',
+                'gcr.io/google-appengine/php70:latest',
+                ["COMPOSER_FLAGS='--no-dev --prefer-dist' \\\n",
+                 "FRONT_CONTROLLER_FILE='index.php' \\\n",
+                 "DETECTED_PHP_VERSION='7.0' \n"
+                ]
+            ],
+            [
+                // values on env_variables
+                __DIR__ . '/test_data/values_only_on_env',
+                null,
+                '',
+                '/app',
+                'added by the php runtime builder',
+                'gcr.io/google-appengine/php71:latest',
+                [
+                    "WHITELIST_FUNCTIONS='exec' \\\n",
+                    "FRONT_CONTROLLER_FILE='app.php'",
+                    "NGINX_CONF_HTTP_INCLUDE='files/nginx-http.conf'",
+                    "NGINX_CONF_INCLUDE='files/nginx-app.conf'",
+                    "NGINX_CONF_OVERRIDE='files/nginx.conf'",
+                    "PHP_FPM_CONF_OVERRIDE='files/php-fpm.conf'",
+                    "PHP_INI_OVERRIDE='files/php.ini'",
+                    "SUPERVISORD_CONF_ADDITION='files/additional-supervisord.conf'",
+                    "SUPERVISORD_CONF_OVERRIDE='files/supervisord.conf'"
+                ]
+            ],
+            [
+                // User must specify document_root
+                __DIR__ . '/test_data/no_docroot',
+                null,
+                '',
+                '/app',
+                'added by the php runtime builder',
+                'gcr.io/google-appengine/php71:latest',
+                [],
+                '\\Google\\Cloud\\Runtimes\\Builder\\Exception\\MissingDocumentRootException'
+            ],
+            [
+                // Values in both places will throw an exception.
+                __DIR__ . '/test_data/values_on_both',
+                null,
+                '',
+                '/app',
+                'added by the php runtime builder',
+                'gcr.io/google-appengine/php71:latest',
+                [
+                    "WHITELIST_FUNCTIONS='exec' \\\n",
+                    "FRONT_CONTROLLER_FILE='app.php'",
+                    "NGINX_CONF_HTTP_INCLUDE='files/nginx-http.conf'",
+                    "NGINX_CONF_INCLUDE='files/nginx-app.conf'",
+                    "NGINX_CONF_OVERRIDE='files/nginx.conf'",
+                    "PHP_FPM_CONF_OVERRIDE='files/php-fpm.conf'",
+                    "PHP_INI_OVERRIDE='files/php.ini'",
+                    "SUPERVISORD_CONF_ADDITION='files/additional-supervisord.conf'",
+                    "SUPERVISORD_CONF_OVERRIDE='files/supervisord.conf'"
+                ],
+                '\\Google\\Cloud\\Runtimes\\Builder\\Exception\\EnvConflictException'
             ],
             [
                 // front_controller_file
                 __DIR__ . '/test_data/front_controller_file',
-                '',
+                null,
                 '',
                 '/app',
                 'added by the php runtime builder',
-                'gcr.io/google-appengine/php-base:latest',
-                ["FRONT_CONTROLLER_FILE=app.php \\\n"]
+                'gcr.io/google-appengine/php71:latest',
+                ["FRONT_CONTROLLER_FILE='app.php' \\\n"]
             ],
             [
                 // Different yaml path
                 __DIR__ . '/test_data/different_yaml',
-                '',
+                null,
                 'my.yaml',
                 '/app',
                 'added by the php runtime builder',
-                'gcr.io/google-appengine/php-base:latest'
+                'gcr.io/google-appengine/php71:latest'
             ],
             [
                 // Overrides baseImage
                 __DIR__ . '/test_data/simplest',
-                'gcr.io/php-mvm-a/php-nginx:latest',
+                [
+                    '--php56-image' => 'gcr.io/php-mvm-a/php56:latest',
+                    '--php70-image' => 'gcr.io/php-mvm-a/php70:latest',
+                    '--php71-image' => 'gcr.io/php-mvm-a/php71:latest',
+                ],
                 '',
                 '/app',
                 'added by the php runtime builder',
-                'gcr.io/php-mvm-a/php-nginx:latest'
+                'gcr.io/php-mvm-a/php71:latest'
             ],
             [
                 // Has document_root set
                 __DIR__ . '/test_data/docroot',
-                '',
+                null,
                 '',
                 '/app/web',
                 'added by the php runtime builder',
-                'gcr.io/google-appengine/php-base:latest'
+                'gcr.io/google-appengine/php71:latest'
             ],
             [
                 // Has document_root set in env_variables
                 __DIR__ . '/test_data/docroot_env',
-                '',
+                null,
                 '',
                 '/app/web',
                 'added by the php runtime builder',
-                'gcr.io/google-appengine/php-base:latest'
+                'gcr.io/google-appengine/php71:latest'
             ],
             [
-                // document_root in runtime_config wins
+                // document_root in both will throw exception
                 __DIR__ . '/test_data/docroot_on_both',
-                '',
+                null,
                 '',
                 '/app/web',
                 'added by the php runtime builder',
-                'gcr.io/google-appengine/php-base:latest'
+                'gcr.io/google-appengine/php71:latest',
+                [],
+                '\\Google\\Cloud\\Runtimes\\Builder\\Exception\\EnvConflictException'
             ],
             [
                 // Has files already
                 __DIR__ . '/test_data/has_files',
-                '',
+                null,
                 '',
                 '/test',
                 'User defined .dockerignore',
                 'gcr.io/google_appengine/debian'
             ],
+            [
+                // Exact PHP version is specified
+                __DIR__ . '/test_data/exact_php_version',
+                null,
+                '',
+                '/app',
+                'added by the php runtime builder',
+                'gcr.io/google-appengine/php56:latest',
+                [],
+                '\\Google\\Cloud\\Runtimes\\Builder\\Exception\\ExactVersionException'
+            ]
         ];
     }
 }
