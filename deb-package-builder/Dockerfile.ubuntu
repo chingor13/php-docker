@@ -75,6 +75,9 @@ RUN apt-get update -y && \
         automake \
         autotools-dev
 
+ENV PHP_DIR=/opt/php
+    PATH=/opt/php/bin:$PATH
+
 COPY build.sh /
 RUN mkdir -p /workspace
 WORKDIR /workspace

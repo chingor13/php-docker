@@ -6,8 +6,9 @@ echo "Building libsodium for gcp-php${SHORT_VERSION}"
 
 PNAME="gcp-php${SHORT_VERSION}-libsodium"
 
-install_last_package "libsodium18"
-install_last_package "libsodium-dev"
+# install_last_package "libsodium18"
+# install_last_package "libsodium-dev"
+apt-get install -y libsodium18 libsodium-dev
 
 # Download the source
 if [ ${SHORT_VERSION} == '56' ]; then

@@ -177,8 +177,6 @@ for VERSION in $(echo ${PHP_VERSIONS} | tr "," "\n"); do
     rm -rf ${PHP_DIR}
     ln -sf /opt/php${SHORT_VERSION} ${PHP_DIR}
 
-    pecl download amqp
-
     # build extensions
     for EXTENSION in $(echo ${EXTENSIONS} | tr "," "\n"); do
         build_php_extension $EXTENSION
