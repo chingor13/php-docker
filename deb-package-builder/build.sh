@@ -53,7 +53,7 @@ fi
 cd ${BUILD_DIR}
 
 # update dependencies
-apt-get upgrade -y
+# apt-get upgrade -y
 
 build_php_version()
 {
@@ -169,9 +169,15 @@ for VERSION in $(echo ${PHP_VERSIONS} | tr "," "\n"); do
 
     # install the php package
     dpkg -i "$ARTIFACT_PKG_DIR/$PHP_PACKAGE"
+
+    PHP_DIR=/opt/php
+    PATH=/opt/php/bin:$PATH
+
     # Make it a default
     rm -rf ${PHP_DIR}
     ln -sf /opt/php${SHORT_VERSION} ${PHP_DIR}
+
+    pecl download amqp
 
     # build extensions
     for EXTENSION in $(echo ${EXTENSIONS} | tr "," "\n"); do

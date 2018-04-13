@@ -7,7 +7,7 @@ steps:
 
   # php-base
   - name: gcr.io/cloud-builders/docker
-    args: ['build', '-t', 'gcr.io/${_GOOGLE_PROJECT_ID}/php-base:$_TAG', '--build-arg', 'RUNTIME_DISTRIBUTION=$_RUNTIME_DISTRIBUTION', '.']
+    args: ['build', '-t', 'gcr.io/${_GOOGLE_PROJECT_ID}/php-base:$_TAG', '--build-arg', 'BASE_IMAGE=gcr.io/gcp-runtimes/ubuntu_16_0_6', '--build-arg', 'RUNTIME_DISTRIBUTION=$_RUNTIME_DISTRIBUTION', '.']
     dir: php-base
     waitFor: ['-']
     id: php-base

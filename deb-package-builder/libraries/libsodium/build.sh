@@ -5,8 +5,8 @@ set -ex
 echo "Downloading libsodium18 and libsodium-dev from backports"
 
 apt-get install -y \
-    libsodium-dev/jessie-backports \
-    libsodium18/jessie-backports
+    libsodium-dev \
+    libsodium18
 
 for PKG in `apt-get install --reinstall --print-uris -qq libsodium-dev | cut -d"'" -f2`; do
   if [ ! -f "${ARTIFACT_LIB_DIR}/$(basename $PKG)" ]; then
