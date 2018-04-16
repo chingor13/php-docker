@@ -1,6 +1,8 @@
 steps:
   - name: gcr.io/cloud-builders/docker
-    args: ['build', '-t', 'gcr.io/${_GOOGLE_PROJECT_ID}/deb-package-builder', '-f', 'Dockerfile.ubuntu', '.']
+    args: ['build', '-t', 'gcr.io/${_GOOGLE_PROJECT_ID}/deb-package-builder',
+      '--build-arg', 'BASE_IMAGE=gcr.io/gcp-runtimes/ubuntu_16_0_4',
+      '--build-arg', 'DEB_BACKPORT_CONFIG=', '.']
     waitFor: ['-']
     id: deb-package-builder
 

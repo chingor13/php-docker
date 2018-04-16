@@ -17,11 +17,13 @@
 #   docker run -v /mydir:/workspace deb-package-builder 5.6.29-1,7.0.14-2
 # Then you'll get deb packages in /mydir.
 
-# Inherit the php base image so we use the same dependency libraries
-FROM gcr.io/google-appengine/php
+ARG BASE_IMAGE=gcr.io/google-appengine/php
+FROM $BASE_IMAGE
+
+ARG DEB_BACKPORT_CONFIG="deb http://ftp.debian.org/debian jessie-backports main"
 
 # Need to install debian packaging tools etc
-RUN echo "deb http://ftp.debian.org/debian jessie-backports main" > /etc/apt/sources.list.d/jessie-backports.list && \
+RUN echo "${DEB_BACKPORT_CONFIG}" > /etc/apt/sources.list.d/backports.list && \
     apt-get update -y && \
     apt-get install -y -q --no-install-recommends \
         debhelper \
@@ -33,9 +35,8 @@ RUN echo "deb http://ftp.debian.org/debian jessie-backports main" > /etc/apt/sou
         libfreetype6-dev \
         libgettextpo-dev \
         libgmp-dev \
-        libuv1-dev/jessie-backports \
         libicu-dev \
-        libjpeg62-turbo-dev \
+        libjpeg-turbo8-dev \
         libjson-c-dev \
         libmagick++-dev \
         libmcrypt-dev \
@@ -58,6 +59,7 @@ RUN echo "deb http://ftp.debian.org/debian jessie-backports main" > /etc/apt/sou
         file \
         g++ \
         gcc \
+        git \
         libc-dev \
         make \
         patch \
@@ -71,7 +73,13 @@ RUN echo "deb http://ftp.debian.org/debian jessie-backports main" > /etc/apt/sou
         fakeroot \
         libtool \
         automake \
-        autotools-dev
+        autotools-dev \
+        # runtime for php
+        libsasl2-modules \
+        libicu55
+
+ENV PHP_DIR=/opt/php \
+    PATH=/opt/php/bin:$PATH
 
 COPY build.sh /
 RUN mkdir -p /workspace
